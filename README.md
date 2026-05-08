@@ -1,2 +1,2 @@
-# BehavIA
-Aplicación web para el análisis del comportamiento de clientes mediante la integración de un chatbot con WhatsApp Business API y un módulo de redes neuronales para predicción y generación de reportes en W&amp;T Food S.A.S.
+# FlowInsight
+	Desarrollar una aplicación web que cargue, analice y visualice datos de clientes mediante dashboards interactivos y machine learning, mejorando las decisiones estratégicas de W&T Food S.A.S. 

@@ -1,73 +1,44 @@
-# React + TypeScript + Vite
+# FlowInsight
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación web para el análisis y visualización del comportamiento de clientes de **W&T Food S.A.S.**, desarrollada como proyecto de grado de Ingeniería de Software (Universidad Manuela Beltrán).
 
-Currently, two official plugins are available:
+Centraliza los pedidos y clientes que hoy se manejan en archivos Excel, calcula indicadores de compra automáticamente y usa dos modelos de machine learning (Random Forest Regressor y Gradient Boosting Classifier sobre variables RFM) para predecir cuándo volverá a comprar un cliente y estimar su riesgo de abandono.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Estado actual
 
-## React Compiler
+| Módulo | Estado |
+|---|---|
+| Frontend (React + Vite + TS) | En desarrollo — dashboard, carga de Excel, predicciones |
+| Backend (FastAPI + PostgreSQL) | Pendiente |
+| Modelo de IA | Diseñado, entrenamiento pendiente |
+| Integración | Pendiente |
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Stack
 
-## Expanding the ESLint configuration
+- **Frontend**: React 19, Vite, TypeScript, React Router, Axios, Chart.js / Recharts
+- **Backend** (pendiente de implementar): FastAPI, PostgreSQL, SQLAlchemy, Alembic
+- **IA**: scikit-learn (Random Forest Regressor, Gradient Boosting Classifier)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Estructura
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+src/
+  api/          # Cliente HTTP hacia el backend (axios + JWT)
+  components/   # Componentes compartidos
+  pages/        # Dashboard, UploadExcel, Predictions, Clients
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Desarrollo local
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
+
+El frontend espera un backend FastAPI corriendo en `http://localhost:8000` con los endpoints `/dashboard/kpis`, `/dashboard/sales`, `/predictions` y `/upload`.
+
+## Equipo
+
+- Asly Camelo — Backend, base de datos, arquitectura y liderazgo del proyecto
+- Julian Quiroz — Integración
+- Britney/Tatiana Torres — Frontend

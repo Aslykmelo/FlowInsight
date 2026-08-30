@@ -1,0 +1,23 @@
+from datetime import datetime
+from pydantic import BaseModel
+
+
+class ClienteCreate(BaseModel):
+    nombre_cliente: str
+    telefono: str | None = None
+    correo: str | None = None
+    direccion: str | None = None
+    autorizacion_datos: bool = False
+
+
+class ClienteOut(BaseModel):
+    id_cliente: int
+    nombre_cliente: str
+    telefono: str | None
+    correo: str | None
+    direccion: str | None
+    fecha_registro: datetime | None
+    autorizacion_datos: bool
+
+    class Config:
+        from_attributes = True

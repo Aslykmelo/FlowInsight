@@ -1,4 +1,3 @@
-from datetime import date
 from pydantic import BaseModel
 
 
@@ -11,6 +10,12 @@ class KPIsOut(BaseModel):
 
 
 class VentaDiaria(BaseModel):
-    fecha: date
+    fecha: str
     total_pedidos: int
     ingresos: float
+
+
+class RiesgoAbandonoOut(BaseModel):
+    bajo_riesgo: int
+    riesgo_medio: int
+    alto_riesgo: int

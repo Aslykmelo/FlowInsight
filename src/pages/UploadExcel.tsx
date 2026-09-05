@@ -10,6 +10,8 @@ interface UploadState {
   message?: string;
 }
 
+const API_URL = "http://127.0.0.1:8000";
+
 // ─── Upload Page ──────────────────────────────────────
 export default function UploadExcel() {
   const [state, setState] = useState<UploadState>({ status: "idle", progress: 0 });
@@ -23,21 +25,63 @@ export default function UploadExcel() {
 
     setState({ status: "uploading", fileName: file.name, progress: 0 });
 
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += 20;
-      setState(prev => ({ ...prev, progress }));
-      if (progress >= 100) {
-        clearInterval(interval);
-        setState({ status: "success", fileName: file.name, progress: 100,
-          message: "Archivo procesado correctamente. Dashboard actualizado." });
-      }
-    }, 400);
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setState({ status: "error", progress: 0, message: "No hay sesión iniciada." });
+      return;
+    }
 
-    // Cuando tengas FastAPI listo, reemplaza el intervalo con:
-    // const form = new FormData();
-    // form.append("file", file);
-    // await axios.post("http://localhost:8000/upload", form);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_URL}/upload`);
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+
+    // Progreso real de la subida
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const progress = Math.round((event.loaded / event.total) * 100);
+        setState(prev => ({ ...prev, progress }));
+      }
+    };
+
+    xhr.onload = () => {
+      let data: any = {};
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        // respuesta no era JSON válido
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const resumen =
+          `Filas procesadas: ${data.filas_procesadas} · ` +
+          `Clientes nuevos: ${data.clientes_creados} · ` +
+          `Productos nuevos: ${data.productos_creados} · ` +
+          `Pedidos creados: ${data.pedidos_creados}` +
+          (data.filas_con_error > 0 ? ` · Filas con error: ${data.filas_con_error}` : "");
+
+        setState({
+          status: "success",
+          fileName: file.name,
+          progress: 100,
+          message: resumen,
+        });
+      } else {
+        setState({
+          status: "error",
+          progress: 0,
+          message: data.detail || "No fue posible procesar el archivo.",
+        });
+      }
+    };
+
+    xhr.onerror = () => {
+      setState({ status: "error", progress: 0, message: "No fue posible conectar con el servidor." });
+    };
+
+    xhr.send(formData);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -141,7 +185,7 @@ export default function UploadExcel() {
                   padding:"8px 20px", cursor:"pointer", fontSize:14 }}>
                   Cargar otro archivo
                 </button>
-                <button onClick={() => navigate("/")} style={{ background:"#534AB7", color:"#fff",
+                <button onClick={() => navigate("/dashboard")} style={{ background:"#534AB7", color:"#fff",
                   border:"none", borderRadius:8,
                   padding:"8px 20px", cursor:"pointer", fontSize:14 }}>
                   Ver dashboard →
@@ -172,17 +216,17 @@ export default function UploadExcel() {
               ¿Cómo debe estar estructurado el archivo?
             </p>
             {[
-              { col:"A", desc:"Fecha del pedido (DD/MM/AAAA)" },
-              { col:"B", desc:"ID o nombre del cliente" },
-              { col:"C", desc:"Producto o categoría" },
-              { col:"D", desc:"Cantidad" },
-              { col:"E", desc:"Valor total de la venta" },
+              { col:"cliente_nombre", desc:"Nombre del cliente" },
+              { col:"cliente_correo", desc:"Correo del cliente (identifica si ya existe)" },
+              { col:"producto_nombre", desc:"Nombre del producto" },
+              { col:"producto_precio", desc:"Precio unitario del producto" },
+              { col:"cantidad", desc:"Cantidad comprada" },
             ].map(row => (
               <div key={row.col} style={{ display:"flex", alignItems:"center",
                 gap:12, padding:"6px 0", borderBottom:"0.5px solid #f0f0f0" }}>
                 <span style={{ background:"#EEEDFE", color:"#534AB7",
                   borderRadius:6, padding:"2px 10px", fontSize:12,
-                  fontWeight:500, minWidth:28, textAlign:"center" }}>
+                  fontWeight:500, minWidth:120, textAlign:"center" }}>
                   {row.col}
                 </span>
                 <span style={{ fontSize:13, color:"#555" }}>{row.desc}</span>

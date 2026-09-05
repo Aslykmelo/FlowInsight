@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.models import Usuario
 from app.core.security import verify_password, create_access_token
-from app.schemas.auth import Token
+from app.core.dependencies import get_current_user
+from app.schemas.auth import Token, UsuarioOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -20,3 +21,13 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         )
     token = create_access_token({"sub": str(usuario.id_usuario)})
     return Token(access_token=token)
+
+
+@router.get("/me", response_model=UsuarioOut)
+def leer_usuario_actual(usuario: Usuario = Depends(get_current_user)):
+    return UsuarioOut(
+        id_usuario=usuario.id_usuario,
+        nombre_usuario=usuario.nombre_usuario,
+        correo=usuario.correo,
+        rol=usuario.rol.nombre_rol,
+    )

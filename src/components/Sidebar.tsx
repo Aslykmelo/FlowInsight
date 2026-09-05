@@ -25,8 +25,8 @@ export default function Sidebar() {
               onClick={() => navigate(item.path)}
               style={{ width:"100%",
                 background: active ? "rgba(83,74,183,0.2)":"transparent",
-                border:"none", borderLeft: active ? "3px solid #7F77DD":"3px solid transparent",
-                color: active ? "#CECBF6":"#8888aa", padding:"10px 1.25rem",
+                border:"none", borderLeft: active ? "3px solid #534AB7":"3px solid transparent",
+                color: active ? "#fff":"#8888aa", padding:"10px 1.25rem",
                 textAlign:"left", cursor:"pointer", fontSize:14,
                 display:"flex", alignItems:"center", gap:10 }}>
               <span>{item.emoji}</span><span>{item.label}</span>

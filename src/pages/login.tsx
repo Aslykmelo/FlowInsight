@@ -405,7 +405,7 @@ export default function Login() {
             <div
               style={{
                 background: "#FAECE7",
-                border: "0.5px solid #F0997B",
+                border: "0.5px solid #E24B4A",
                 borderRadius: 8,
                 padding: "10px 14px",
                 fontSize: 13,

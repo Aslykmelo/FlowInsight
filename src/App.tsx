@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard";
 import UploadExcel from "./pages/UploadExcel";
 import Predictions from "./pages/Predictions";
 import Clients from "./pages/Clients";
+import Reports from "./pages/Reports";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/upload" element={<UploadExcel />} />
           <Route path="/predictions" element={<Predictions />} />
           <Route path="/clients" element={<Clients />} />
+          <Route path="/reports" element={<Reports />} />
         </Route>
       </Routes>
     </BrowserRouter>

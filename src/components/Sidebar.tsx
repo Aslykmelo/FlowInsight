@@ -5,6 +5,7 @@ const NAV = [
   { emoji:"📁", label:"Cargar Excel", path:"/upload"       },
   { emoji:"🤖", label:"Predicciones", path:"/predictions"  },
   { emoji:"👥", label:"Clientes",     path:"/clients"      },
+  { emoji:"📄", label:"Reportes",     path:"/reports"      },
 ];
 export default function Sidebar() {
   const navigate = useNavigate();

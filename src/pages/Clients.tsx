@@ -36,6 +36,15 @@ const ESTADO_STYLE: Record<string, { color: string; bg: string }> = {
   "inactivo":  { color:"#993C1D", bg:"#FAECE7" },
 };
 
+// ─── Ciudades disponibles (derivadas de los clientes) ─
+const CIUDADES = Array.from(new Set(CLIENTS.map(c => c.ciudad))).sort();
+
+// ─── "DD/MM/AAAA" → "AAAAMMDD" para comparar fechas sin líos de huso horario ─
+function fechaComparable(fecha: string): string {
+  const [d, m, y] = fecha.split("/");
+  return `${y}${m.padStart(2, "0")}${d.padStart(2, "0")}`;
+}
+
 // ─── Modal detalle cliente ────────────────────────────
 function ClientModal({ client, onClose }: { client: Client; onClose: () => void }) {
   const s = ESTADO_STYLE[client.estado];
@@ -102,8 +111,41 @@ export default function Clients() {
   const [filtro, setFiltro]       = useState<"todos" | "activo" | "en riesgo" | "inactivo">("todos");
   const [selected, setSelected]   = useState<Client | null>(null);
 
+  const [ciudad, setCiudad]             = useState("todas");
+  const [fechaDesde, setFechaDesde]     = useState("");
+  const [fechaHasta, setFechaHasta]     = useState("");
+  const [intervaloMin, setIntervaloMin] = useState("");
+  const [intervaloMax, setIntervaloMax] = useState("");
+
+  const hayFiltrosActivos =
+    busqueda !== "" || filtro !== "todos" || ciudad !== "todas" ||
+    fechaDesde !== "" || fechaHasta !== "" || intervaloMin !== "" || intervaloMax !== "";
+
+  const limpiarFiltros = () => {
+    setBusqueda("");
+    setFiltro("todos");
+    setCiudad("todas");
+    setFechaDesde("");
+    setFechaHasta("");
+    setIntervaloMin("");
+    setIntervaloMax("");
+  };
+
   const datos = CLIENTS
     .filter(c => filtro === "todos" || c.estado === filtro)
+    .filter(c => ciudad === "todas" || c.ciudad === ciudad)
+    .filter(c => {
+      if (!fechaDesde && !fechaHasta) return true;
+      const fc = fechaComparable(c.ultimaCompra);
+      if (fechaDesde && fc < fechaDesde.replace(/-/g, "")) return false;
+      if (fechaHasta && fc > fechaHasta.replace(/-/g, "")) return false;
+      return true;
+    })
+    .filter(c => {
+      if (intervaloMin !== "" && c.intervalo < Number(intervaloMin)) return false;
+      if (intervaloMax !== "" && c.intervalo > Number(intervaloMax)) return false;
+      return true;
+    })
     .filter(c =>
       c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
       c.id.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -172,6 +214,61 @@ export default function Clients() {
                 {f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
+          </div>
+
+          {/* Filtros avanzados */}
+          <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12,
+            padding:"1rem 1.25rem", display:"flex", gap:16, alignItems:"flex-end", flexWrap:"wrap" }}>
+
+            <div style={{ display:"flex", flexDirection:"column", gap:6, minWidth:170 }}>
+              <label style={{ fontSize:12, color:"#888", fontWeight:500 }}>Ciudad</label>
+              <select value={ciudad} onChange={e => setCiudad(e.target.value)}
+                style={{ border:"0.5px solid #e0e0e0", borderRadius:8, padding:"8px 10px",
+                  fontSize:13, outline:"none", background:"#fff", boxSizing:"border-box" as const }}>
+                <option value="todas">Todas las ciudades</option>
+                {CIUDADES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              <label style={{ fontSize:12, color:"#888", fontWeight:500 }}>Última compra desde</label>
+              <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
+                style={{ border:"0.5px solid #e0e0e0", borderRadius:8, padding:"8px 10px",
+                  fontSize:13, outline:"none", boxSizing:"border-box" as const }} />
+            </div>
+
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              <label style={{ fontSize:12, color:"#888", fontWeight:500 }}>Hasta</label>
+              <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
+                style={{ border:"0.5px solid #e0e0e0", borderRadius:8, padding:"8px 10px",
+                  fontSize:13, outline:"none", boxSizing:"border-box" as const }} />
+            </div>
+
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              <label style={{ fontSize:12, color:"#888", fontWeight:500 }}>Intervalo mín. (días)</label>
+              <input type="number" min={0} placeholder="0" value={intervaloMin}
+                onChange={e => setIntervaloMin(e.target.value)}
+                style={{ width:90, border:"0.5px solid #e0e0e0", borderRadius:8, padding:"8px 10px",
+                  fontSize:13, outline:"none", boxSizing:"border-box" as const }} />
+            </div>
+
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              <label style={{ fontSize:12, color:"#888", fontWeight:500 }}>Intervalo máx. (días)</label>
+              <input type="number" min={0} placeholder="90" value={intervaloMax}
+                onChange={e => setIntervaloMax(e.target.value)}
+                style={{ width:90, border:"0.5px solid #e0e0e0", borderRadius:8, padding:"8px 10px",
+                  fontSize:13, outline:"none", boxSizing:"border-box" as const }} />
+            </div>
+
+            <button onClick={limpiarFiltros} disabled={!hayFiltrosActivos}
+              style={{ marginLeft:"auto",
+                background: hayFiltrosActivos ? "#fff" : "#f5f5f7",
+                color: hayFiltrosActivos ? "#534AB7" : "#bbb",
+                border: hayFiltrosActivos ? "0.5px solid #534AB7" : "0.5px solid #e0e0e0",
+                borderRadius:8, padding:"8px 16px", fontSize:13,
+                cursor: hayFiltrosActivos ? "pointer" : "not-allowed" }}>
+              Limpiar filtros
+            </button>
           </div>
 
           {/* Tabla */}

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
+import LoadingSpinner from "../components/LoadingSpinner";
+import ErrorMessage from "../components/ErrorMessage";
 
 import {
   BarChart,
@@ -366,9 +368,9 @@ export default function Dashboard() {
 
           positive: true,
 
-          color: "#185FA5",
+          color: "#BA7517",
 
-          bg: "#E6F1FB",
+          bg: "#FAEEDA",
         },
 
         {
@@ -378,13 +380,13 @@ export default function Dashboard() {
             kpis.ingresos_totales
           ),
 
-          delta: "Ventas Totales",  
+          delta: "Ventas Totales",
 
           positive: true,
 
-          color: "#993C1D",
+          color: "#0F6E56",
 
-          bg: "#FAECE7",
+          bg: "#E1F5EE",
         },
       ]
     : [];
@@ -477,12 +479,9 @@ export default function Dashboard() {
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            fontSize: 18,
-            color: "#666",
           }}
         >
-          Cargando información del
-          dashboard...
+          <LoadingSpinner message="Cargando información del dashboard..." />
         </div>
       </div>
     );
@@ -511,35 +510,13 @@ export default function Dashboard() {
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            flexDirection: "column",
-            gap: 10,
+            padding: "1.5rem",
           }}
         >
-          <h2>Error</h2>
-
-          <p
-            style={{
-              color: "#777",
-            }}
-          >
-            {error}
-          </p>
-
-          <button
-            onClick={() =>
-              window.location.reload()
-            }
-            style={{
-              background: "#534AB7",
-              color: "#fff",
-              border: "none",
-              borderRadius: 8,
-              padding: "10px 18px",
-              cursor: "pointer",
-            }}
-          >
-            Intentar nuevamente
-          </button>
+          <ErrorMessage
+            message={error}
+            onRetry={() => window.location.reload()}
+          />
         </div>
       </div>
     );

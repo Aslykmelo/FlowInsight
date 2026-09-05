@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
+import ErrorMessage from "../components/ErrorMessage";
 
 // ─── Types ────────────────────────────────────────────
 interface UploadState {
@@ -196,16 +197,11 @@ export default function UploadExcel() {
 
           {/* Error */}
           {state.status === "error" && (
-            <div style={{ width:"100%", maxWidth:560, background:"#FAECE7",
-              border:"0.5px solid #F0997B", borderRadius:12, padding:"1.25rem",
-              display:"flex", alignItems:"center", gap:12 }}>
-              <span style={{ fontSize:24 }}>⚠️</span>
-              <div>
-                <p style={{ margin:0, fontSize:14, fontWeight:500, color:"#993C1D" }}>Error</p>
-                <p style={{ margin:0, fontSize:13, color:"#993C1D" }}>{state.message}</p>
-              </div>
-              <button onClick={reset} style={{ marginLeft:"auto", background:"transparent",
-                border:"none", cursor:"pointer", fontSize:20, color:"#993C1D" }}>×</button>
+            <div style={{ width:"100%", maxWidth:560 }}>
+              <ErrorMessage
+                message={state.message || "No fue posible procesar el archivo."}
+                onRetry={reset}
+              />
             </div>
           )}
 

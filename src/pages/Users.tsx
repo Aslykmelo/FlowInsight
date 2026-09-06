@@ -1,14 +1,23 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
 
 // ─── Types ────────────────────────────────────────────
 interface User {
-  id: string;
+  id: number;
   nombre: string;
   email: string;
   rol: "Administrador" | "Analista";
   estado: "activo" | "inactivo";
   ultimaSesion: string;
+}
+
+interface ApiUsuario {
+  id_usuario: number;
+  nombre: string;
+  email: string;
+  rol: string;
+  estado: string;
+  ultima_sesion: string | null;
 }
 
 interface UserFormData {
@@ -18,29 +27,38 @@ interface UserFormData {
   password: string;
 }
 
-// ─── Mock data — usuarios del sistema ─────────────────
-const USUARIOS_INICIALES: User[] = [
-  { id: "USR001", nombre: "Ana Torres",      email: "ana.torres@flowinsight.com",      rol: "Administrador", estado: "activo",   ultimaSesion: "22/04/2026 09:14" },
-  { id: "USR002", nombre: "Julián Quintero", email: "julian.quintero@flowinsight.com", rol: "Analista",       estado: "activo",   ultimaSesion: "21/04/2026 17:40" },
-  { id: "USR003", nombre: "Camila Rojas",    email: "camila.rojas@flowinsight.com",    rol: "Analista",       estado: "inactivo", ultimaSesion: "02/03/2026 11:05" },
-  { id: "USR004", nombre: "Asly Camelo",     email: "asly@flowinsight.com",            rol: "Administrador", estado: "activo",   ultimaSesion: "22/04/2026 08:02" },
-  { id: "USR005", nombre: "David Peña",      email: "david.pena@flowinsight.com",      rol: "Analista",       estado: "inactivo", ultimaSesion: "15/01/2026 13:22" },
-];
+const API_URL = "http://127.0.0.1:8000";
 
 const ESTADO_STYLE: Record<User["estado"], { color: string; bg: string; label: string }> = {
   activo:   { color: "#0F6E56", bg: "#E1F5EE", label: "Activo"   },
   inactivo: { color: "#993C1D", bg: "#FAECE7", label: "Inactivo" },
 };
 
+// ─── Helpers ───────────────────────────────────────────
+const formatoFechaHora = (iso: string | null) =>
+  iso
+    ? new Date(iso).toLocaleString("es-CO", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      })
+    : "Nunca";
+
+const rolValido = (rol: string): User["rol"] =>
+  rol === "Administrador" ? "Administrador" : "Analista";
+
 // ─── Modal de crear/editar usuario ─────────────────────
 function UserModal({
   user,
   onSave,
   onClose,
+  guardando,
+  errorExterno,
 }: {
   user: User | null;
   onSave: (data: UserFormData) => void;
   onClose: () => void;
+  guardando: boolean;
+  errorExterno: string;
 }) {
   const esEdicion = user !== null;
 
@@ -59,8 +77,11 @@ function UserModal({
       setError("La contraseña es obligatoria para un usuario nuevo.");
       return;
     }
+    setError("");
     onSave({ nombre: nombre.trim(), email: email.trim(), rol, password });
   };
+
+  const mensajeError = error || errorExterno;
 
   const labelStyle: React.CSSProperties = {
     display: "block", fontSize: 13, fontWeight: 500, color: "#555", marginBottom: 6,
@@ -110,7 +131,7 @@ function UserModal({
           </select>
         </div>
 
-        <div style={{ marginBottom: error ? 10 : 20 }}>
+        <div style={{ marginBottom: mensajeError ? 10 : 20 }}>
           <label style={labelStyle}>
             {esEdicion ? "Nueva contraseña (opcional)" : "Contraseña"}
           </label>
@@ -119,21 +140,22 @@ function UserModal({
             style={inputStyle} />
         </div>
 
-        {error && (
+        {mensajeError && (
           <div style={{ background: "#FAECE7", border: "0.5px solid #E24B4A", borderRadius: 8,
             padding: "10px 14px", fontSize: 13, color: "#993C1D", marginBottom: 16 }}>
-            ⚠️ {error}
+            ⚠️ {mensajeError}
           </div>
         )}
 
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onClose} style={{ flex: 1, background: "#fff", color: "#555",
+          <button onClick={onClose} disabled={guardando} style={{ flex: 1, background: "#fff", color: "#555",
             border: "0.5px solid #e0e0e0", borderRadius: 8, padding: "10px", cursor: "pointer", fontSize: 14 }}>
             Cancelar
           </button>
-          <button onClick={handleSubmit} style={{ flex: 1, background: "#534AB7", color: "#fff",
-            border: "none", borderRadius: 8, padding: "10px", cursor: "pointer", fontSize: 14, fontWeight: 500 }}>
-            {esEdicion ? "Guardar cambios" : "Crear usuario"}
+          <button onClick={handleSubmit} disabled={guardando} style={{ flex: 1, background: "#534AB7", color: "#fff",
+            border: "none", borderRadius: 8, padding: "10px", cursor: guardando ? "default" : "pointer",
+            fontSize: 14, fontWeight: 500, opacity: guardando ? 0.7 : 1 }}>
+            {guardando ? "Guardando..." : esEdicion ? "Guardar cambios" : "Crear usuario"}
           </button>
         </div>
       </div>
@@ -143,10 +165,67 @@ function UserModal({
 
 // ─── Users Page ────────────────────────────────────────
 export default function Users() {
-  const [users, setUsers] = useState<User[]>(USUARIOS_INICIALES);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
   const [busqueda, setBusqueda] = useState("");
   const [modalAbierto, setModalAbierto] = useState(false);
   const [usuarioEditando, setUsuarioEditando] = useState<User | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [errorModal, setErrorModal] = useState("");
+
+  // ───────────────────────────────────────────
+  // CARGAR USUARIOS DEL BACKEND
+  // ───────────────────────────────────────────
+  const cargarUsuarios = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setError("No hay sesión iniciada.");
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/users`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 403) {
+        setError("No tienes permisos para gestionar usuarios (solo Administrador).");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Error al obtener usuarios: ${response.status}`);
+      }
+
+      const data: ApiUsuario[] = await response.json();
+
+      const usuariosFormateados: User[] = data.map((u) => ({
+        id: u.id_usuario,
+        nombre: u.nombre,
+        email: u.email,
+        rol: rolValido(u.rol),
+        estado: u.estado === "inactivo" ? "inactivo" : "activo",
+        ultimaSesion: formatoFechaHora(u.ultima_sesion),
+      }));
+
+      setUsers(usuariosFormateados);
+    } catch (err) {
+      console.error(err);
+      setError("No fue posible cargar los usuarios.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    cargarUsuarios();
+  }, []);
 
   const datos = users.filter(
     (u) =>
@@ -156,50 +235,143 @@ export default function Users() {
 
   const abrirCrear = () => {
     setUsuarioEditando(null);
+    setErrorModal("");
     setModalAbierto(true);
   };
 
   const abrirEditar = (u: User) => {
     setUsuarioEditando(u);
+    setErrorModal("");
     setModalAbierto(true);
   };
 
-  // La creación/edición real la maneja el backend en POST/PUT /users
-  const guardarUsuario = (data: UserFormData) => {
-    if (usuarioEditando) {
-      console.log(`PUT /users/${usuarioEditando.id}`, data);
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === usuarioEditando.id
-            ? { ...u, nombre: data.nombre, email: data.email, rol: data.rol }
-            : u
-        )
-      );
-    } else {
-      console.log("POST /users", data);
-      const nuevoId = `USR${String(users.length + 1).padStart(3, "0")}`;
-      setUsers((prev) => [
-        ...prev,
-        { id: nuevoId, nombre: data.nombre, email: data.email, rol: data.rol, estado: "activo", ultimaSesion: "Nunca" },
-      ]);
+  // ───────────────────────────────────────────
+  // CREAR / EDITAR USUARIO (POST o PUT /users)
+  // ───────────────────────────────────────────
+  const guardarUsuario = async (data: UserFormData) => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setErrorModal("No hay sesión iniciada.");
+      return;
     }
-    setModalAbierto(false);
+
+    setGuardando(true);
+    setErrorModal("");
+
+    try {
+      const esEdicion = usuarioEditando !== null;
+      const url = esEdicion
+        ? `${API_URL}/users/${usuarioEditando!.id}`
+        : `${API_URL}/users`;
+
+      const body = esEdicion
+        ? { nombre: data.nombre, email: data.email, rol: data.rol, password: data.password || null }
+        : { nombre: data.nombre, email: data.email, rol: data.rol, password: data.password };
+
+      const response = await fetch(url, {
+        method: esEdicion ? "PUT" : "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Error ${response.status}`);
+      }
+
+      setModalAbierto(false);
+      await cargarUsuarios();
+    } catch (err) {
+      setErrorModal(err instanceof Error ? err.message : "No fue posible guardar el usuario.");
+    } finally {
+      setGuardando(false);
+    }
   };
 
-  // El cambio de estado real lo maneja el backend en PATCH /users/{id}/estado
-  const toggleEstado = (u: User) => {
+  // ───────────────────────────────────────────
+  // ACTIVAR / DESACTIVAR (PATCH /users/{id}/estado)
+  // ───────────────────────────────────────────
+  const toggleEstado = async (u: User) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
     const nuevoEstado = u.estado === "activo" ? "inactivo" : "activo";
-    console.log(`PATCH /users/${u.id}/estado`, { estado: nuevoEstado });
+
+    // Actualización optimista, para que la UI responda al instante
     setUsers((prev) =>
       prev.map((x) => (x.id === u.id ? { ...x, estado: nuevoEstado } : x))
     );
+
+    try {
+      const response = await fetch(`${API_URL}/users/${u.id}/estado`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ estado: nuevoEstado }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}`);
+      }
+    } catch (err) {
+      console.error(err);
+      // Si falló, revierte el cambio optimista
+      setUsers((prev) =>
+        prev.map((x) => (x.id === u.id ? { ...x, estado: u.estado } : x))
+      );
+    }
   };
+
+  // ───────────────────────────────────────────
+  // LOADING
+  // ───────────────────────────────────────────
+  if (loading) {
+    return (
+      <div style={{ display: "flex", minHeight: "100vh", background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
+        <Sidebar />
+        <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", fontSize: 18, color: "#666" }}>
+          Cargando usuarios...
+        </div>
+      </div>
+    );
+  }
+
+  // ───────────────────────────────────────────
+  // ERROR
+  // ───────────────────────────────────────────
+  if (error) {
+    return (
+      <div style={{ display: "flex", minHeight: "100vh", background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
+        <Sidebar />
+        <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center",
+          flexDirection: "column", gap: 10 }}>
+          <h2>Error</h2>
+          <p style={{ color: "#777" }}>{error}</p>
+          <button onClick={() => window.location.reload()} style={{ background: "#534AB7", color: "#fff",
+            border: "none", borderRadius: 8, padding: "10px 18px", cursor: "pointer" }}>
+            Intentar nuevamente
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
       <Sidebar />
       {modalAbierto && (
-        <UserModal user={usuarioEditando} onSave={guardarUsuario} onClose={() => setModalAbierto(false)} />
+        <UserModal
+          user={usuarioEditando}
+          onSave={guardarUsuario}
+          onClose={() => setModalAbierto(false)}
+          guardando={guardando}
+          errorExterno={errorModal}
+        />
       )}
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
@@ -231,7 +403,7 @@ export default function Users() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#f9f9f9", borderBottom: "0.5px solid #e0e0e0" }}>
-                  {["ID", "Nombre", "Email", "Rol", "Estado", "Última sesión", ""].map((h) => (
+                  {["Nombre", "Email", "Rol", "Estado", "Última sesión", ""].map((h) => (
                     <th key={h} style={{ padding: "10px 16px", textAlign: "left",
                       fontWeight: 500, color: "#666", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
@@ -239,7 +411,7 @@ export default function Users() {
               </thead>
               <tbody>
                 {datos.length === 0 ? (
-                  <tr><td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "#aaa" }}>
+                  <tr><td colSpan={6} style={{ padding: "2rem", textAlign: "center", color: "#aaa" }}>
                     No se encontraron usuarios
                   </td></tr>
                 ) : datos.map((u, i) => {
@@ -247,7 +419,6 @@ export default function Users() {
                   return (
                     <tr key={u.id} style={{ borderBottom: "0.5px solid #f0f0f0",
                       background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                      <td style={{ padding: "12px 16px", color: "#888", fontWeight: 500 }}>{u.id}</td>
                       <td style={{ padding: "12px 16px", fontWeight: 500 }}>{u.nombre}</td>
                       <td style={{ padding: "12px 16px", color: "#555" }}>{u.email}</td>
                       <td style={{ padding: "12px 16px" }}>

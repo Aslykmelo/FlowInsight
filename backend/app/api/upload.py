@@ -1,4 +1,5 @@
 import pandas as pd
+from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -11,7 +12,7 @@ from app.core.dependencies import get_current_user
 router = APIRouter(prefix="/upload", tags=["upload"])
 
 
-# Nombres de columnas requeridas en el archivo Excel
+# Columnas obligatorias (sin ellas, no se puede procesar el archivo)
 COLUMNAS_REQUERIDAS = {
     "cliente_nombre",
     "cliente_correo",
@@ -19,6 +20,36 @@ COLUMNAS_REQUERIDAS = {
     "producto_precio",
     "cantidad",
 }
+
+# NUEVO: columnas opcionales — si no vienen en el Excel, simplemente se ignoran
+COLUMNAS_OPCIONALES = {
+    "cliente_telefono",
+    "cliente_direccion",
+    "cliente_autorizacion_datos",
+    "producto_categoria",
+    "producto_stock",
+    "fecha_pedido",
+}
+
+
+# NUEVO: convierte el valor de la celda de fecha (texto, datetime o vacío) a un datetime real
+def parsear_fecha(valor):
+    if pd.isna(valor):
+        return None
+    if isinstance(valor, datetime):
+        return valor
+    try:
+        return pd.to_datetime(valor).to_pydatetime()
+    except Exception:
+        return None
+
+
+# NUEVO: convierte texto tipo "si"/"true"/"1" a booleano
+def parsear_booleano(valor):
+    if pd.isna(valor):
+        return None
+    texto = str(valor).strip().lower()
+    return texto in ("si", "sí", "true", "1", "yes")
 
 
 @router.post("", response_model=UploadResult)
@@ -49,6 +80,9 @@ async def cargar_excel(
             detail=f"Faltan columnas obligatorias: {', '.join(faltantes)}",
         )
 
+    # NUEVO: qué columnas opcionales sí vinieron en este archivo
+    columnas_presentes = COLUMNAS_OPCIONALES & set(df.columns)
+
     errores = []
     clientes_creados = 0
     productos_creados = 0
@@ -76,6 +110,25 @@ async def cargar_excel(
                 cliente = Cliente(
                     nombre_cliente=str(fila["cliente_nombre"]),
                     correo=str(fila["cliente_correo"]),
+                    # NUEVO: campos opcionales del cliente, solo si vinieron en el archivo
+                    telefono=(
+                        str(fila["cliente_telefono"])
+                        if "cliente_telefono" in columnas_presentes
+                        and not pd.isna(fila["cliente_telefono"])
+                        else None
+                    ),
+                    direccion=(
+                        str(fila["cliente_direccion"])
+                        if "cliente_direccion" in columnas_presentes
+                        and not pd.isna(fila["cliente_direccion"])
+                        else None
+                    ),
+                    autorizacion_datos=(
+                        parsear_booleano(fila["cliente_autorizacion_datos"])
+                        if "cliente_autorizacion_datos" in columnas_presentes
+                        else None
+                    ),
+                    fecha_registro=datetime.now(),
                 )
 
                 db.add(cliente)
@@ -96,6 +149,19 @@ async def cargar_excel(
                 producto = Producto(
                     nombre_producto=str(fila["producto_nombre"]),
                     precio=float(fila["producto_precio"]),
+                    # NUEVO: campos opcionales del producto
+                    categoria=(
+                        str(fila["producto_categoria"])
+                        if "producto_categoria" in columnas_presentes
+                        and not pd.isna(fila["producto_categoria"])
+                        else None
+                    ),
+                    stock=(
+                        int(fila["producto_stock"])
+                        if "producto_stock" in columnas_presentes
+                        and not pd.isna(fila["producto_stock"])
+                        else None
+                    ),
                 )
 
                 db.add(producto)
@@ -106,11 +172,19 @@ async def cargar_excel(
             cantidad = int(fila["cantidad"])
             subtotal = float(producto.precio) * cantidad
 
+            # NUEVO: usa la fecha real del Excel si vino; si no, usa la fecha actual
+            fecha_pedido = (
+                parsear_fecha(fila["fecha_pedido"])
+                if "fecha_pedido" in columnas_presentes
+                else None
+            ) or datetime.now()
+
             pedido = Pedido(
                 id_cliente=cliente.id_cliente,
                 canal="excel",
                 estado_pedido="pendiente",
                 total=subtotal,
+                fecha_pedido=fecha_pedido,  # NUEVO
             )
 
             db.add(pedido)

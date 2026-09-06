@@ -233,20 +233,58 @@ export default function Dashboard() {
         if (!salesResponse.ok) throw new Error(`Error al obtener ventas: ${salesResponse.status}`);
         const salesApiData: ApiSale[] = await salesResponse.json();
 
-        const nombresMeses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+        // ======================================================
+        // 3. TRANSFORMAR VENTAS
+        // ======================================================
 
-        const datosGrafica: SalesPoint[] = salesApiData.map((item) => {
-          const partes = item.fecha.split("-");
-          const numeroMes = Number(partes[1]);
-          const mes = nombresMeses[numeroMes - 1] || item.fecha;
-          const ventas = Number(item.ingresos);
+        const nombresMeses = [
+          "Ene",
+          "Feb",
+          "Mar",
+          "Abr",
+          "May",
+          "Jun",
+          "Jul",
+          "Ago",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dic",
+        ];
 
-          // Predicción temporal: NO crea datos en la BD, solo mantiene
-          // la gráfica mientras conectamos el modelo ML real (semana 6-7).
-          const prediccion = Math.round(ventas * 0.94);
+        const datosGrafica: SalesPoint[] =
+          salesApiData.map((item) => {
+            const partes = item.fecha.split("-");
 
-          return { mes, ventas, prediccion };
-        });
+            const numeroMes = Number(partes[1]);
+
+            const anio = partes[0].slice(-2);
+
+            const nombreMes =
+              nombresMeses[numeroMes - 1] ||
+              item.fecha;
+
+            const mes = `${nombreMes} ${anio}`;
+
+            const ventas = Number(item.ingresos);
+
+            // ==================================================
+            // PREDICCIÓN TEMPORAL
+            // ==================================================
+            // Esto NO crea datos en la BD.
+            // Solamente permite mantener la gráfica
+            // mientras conectamos el modelo ML real.
+
+            const prediccion = Math.round(
+              ventas * 0.94
+            );
+
+            return {
+              mes,
+              ventas,
+              prediccion,
+            };
+          });
 
         setSalesData(datosGrafica);
 

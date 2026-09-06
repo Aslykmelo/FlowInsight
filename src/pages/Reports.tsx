@@ -4,31 +4,33 @@ import Sidebar from "../components/Sidebar";
 
 // ─── Types ────────────────────────────────────────────
 interface Report {
-  id: string;
+  id: number;
   nombre: string;
   tipo: string;
   fecha: string;
   estado: "listo" | "generando" | "error";
 }
 
-interface Formato {
-  value: "pdf" | "xlsx" | "csv";
+interface ApiReporte {
+  id_reporte: number;
+  nombre: string | null;
+  tipo: string | null;
+  formato: string | null;
+  estado: string | null;
+  fecha: string | null;
+}
+
+interface TipoReporte {
+  value: string;
   label: string;
 }
 
 interface DropdownState {
-  id: string;
+  id: number | "header";
   rect: DOMRect;
 }
 
-// ─── Mock data — reportes de W&T Food ────────────────
-const REPORTS: Report[] = [
-  { id: "REP001", nombre: "Ventas de abril 2026",        tipo: "Ventas mensuales",     fecha: "01/05/2026", estado: "listo"     },
-  { id: "REP002", nombre: "Clientes en riesgo - Q2",      tipo: "Riesgo de abandono",   fecha: "28/04/2026", estado: "listo"     },
-  { id: "REP003", nombre: "Predicciones ML - Mayo",       tipo: "Predicciones",         fecha: "30/04/2026", estado: "generando" },
-  { id: "REP004", nombre: "Historial de clientes",        tipo: "Clientes",             fecha: "15/04/2026", estado: "listo"     },
-  { id: "REP005", nombre: "Ventas de marzo 2026",         tipo: "Ventas mensuales",     fecha: "01/04/2026", estado: "error"     },
-];
+const API_URL = "http://127.0.0.1:8000";
 
 const ESTADO_STYLE: Record<Report["estado"], { color: string; bg: string; label: string }> = {
   listo:     { color: "#0F6E56", bg: "#E1F5EE", label: "Listo"     },
@@ -36,19 +38,26 @@ const ESTADO_STYLE: Record<Report["estado"], { color: string; bg: string; label:
   error:     { color: "#993C1D", bg: "#FAECE7", label: "Error"     },
 };
 
-const FORMATOS: Formato[] = [
-  { value: "pdf",  label: "PDF"            },
-  { value: "xlsx", label: "Excel (.xlsx)"  },
-  { value: "csv",  label: "CSV"            },
+// El backend por ahora solo genera .xlsx, así que el selector
+// ofrece los tipos de reporte disponibles, no formatos de archivo.
+const TIPOS: TipoReporte[] = [
+  { value: "ventas",       label: "Ventas mensuales"   },
+  { value: "clientes",     label: "Historial de clientes" },
+  { value: "riesgo",       label: "Riesgo de abandono" },
+  { value: "predicciones", label: "Predicciones ML"    },
 ];
 
-// ─── Selector de formato (dropdown vía portal) ────────
-function FormatDropdown({
+const TIPO_LABEL: Record<string, string> = Object.fromEntries(
+  TIPOS.map((t) => [t.value, t.label])
+);
+
+// ─── Selector de tipo de reporte (dropdown vía portal) ─
+function TipoDropdown({
   rect,
   onSelect,
 }: {
   rect: DOMRect;
-  onSelect: (formato: Formato) => void;
+  onSelect: (tipo: TipoReporte) => void;
 }) {
   return createPortal(
     <div
@@ -56,8 +65,8 @@ function FormatDropdown({
       style={{
         position: "fixed",
         top: rect.bottom + 6,
-        left: Math.max(8, rect.right - 170),
-        width: 170,
+        left: Math.max(8, rect.right - 200),
+        width: 200,
         background: "#fff",
         border: "0.5px solid #e0e0e0",
         borderRadius: 8,
@@ -66,17 +75,17 @@ function FormatDropdown({
         zIndex: 1000,
       }}
     >
-      {FORMATOS.map((f, idx) => (
+      {TIPOS.map((t, idx) => (
         <button
-          key={f.value}
-          onClick={() => onSelect(f)}
+          key={t.value}
+          onClick={() => onSelect(t)}
           style={{
             display: "block",
             width: "100%",
             textAlign: "left",
             background: "transparent",
             border: "none",
-            borderBottom: idx < FORMATOS.length - 1 ? "0.5px solid #f0f0f0" : "none",
+            borderBottom: idx < TIPOS.length - 1 ? "0.5px solid #f0f0f0" : "none",
             padding: "9px 14px",
             fontSize: 13,
             color: "#333",
@@ -85,7 +94,7 @@ function FormatDropdown({
           onMouseEnter={(e) => (e.currentTarget.style.background = "#f5f5f7")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
-          {f.label}
+          {t.label}
         </button>
       ))}
     </div>,
@@ -125,14 +134,71 @@ function Toast({ message }: { message: string }) {
   );
 }
 
+// ─── Helpers ───────────────────────────────────────────
+const formatoFecha = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
+
+const estadoValido = (estado: string | null): Report["estado"] =>
+  estado === "listo" || estado === "generando" || estado === "error" ? estado : "error";
+
 // ─── Reports Page ─────────────────────────────────────
 export default function Reports() {
+  const [reports, setReports] = useState<Report[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [generando, setGenerando] = useState(false);
+
   const [openDropdown, setOpenDropdown] = useState<DropdownState | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Cerrar el dropdown al hacer click fuera (pero no si el click
-  // fue en el propio botón que lo abre, o dentro del menú)
+  // ───────────────────────────────────────────
+  // CARGAR REPORTES DEL BACKEND
+  // ───────────────────────────────────────────
+  const cargarReportes = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setError("No hay sesión iniciada.");
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/reports`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error al obtener reportes: ${response.status}`);
+      }
+
+      const data: ApiReporte[] = await response.json();
+
+      const reportesFormateados: Report[] = data.map((r) => ({
+        id: r.id_reporte,
+        nombre: r.nombre || TIPO_LABEL[r.tipo || ""] || "Reporte",
+        tipo: r.tipo ? (TIPO_LABEL[r.tipo] || r.tipo) : "—",
+        fecha: formatoFecha(r.fecha),
+        estado: estadoValido(r.estado),
+      }));
+
+      setReports(reportesFormateados);
+    } catch (err) {
+      console.error(err);
+      setError("No fue posible cargar los reportes.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    cargarReportes();
+  }, []);
+
+  // Cerrar el dropdown al hacer click fuera
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       const target = e.target as HTMLElement;
@@ -156,7 +222,7 @@ export default function Reports() {
     toastTimer.current = setTimeout(() => setToast(null), 3000);
   };
 
-  const toggleDropdown = (id: string, e: React.MouseEvent<HTMLButtonElement>) => {
+  const toggleDropdown = (id: number | "header", e: React.MouseEvent<HTMLButtonElement>) => {
     if (openDropdown?.id === id) {
       setOpenDropdown(null);
       return;
@@ -164,19 +230,150 @@ export default function Reports() {
     setOpenDropdown({ id, rect: e.currentTarget.getBoundingClientRect() });
   };
 
-  // La descarga real la maneja el backend en:
-  // GET /reports/{id}/download?format={formato}
-  const exportarReporte = (id: string, formato: Formato) => {
-    console.log(`GET /reports/${id}/download?format=${formato.value}`);
-    mostrarToast(`Descargando reporte en ${formato.label}...`);
+  // ───────────────────────────────────────────
+  // GENERAR REPORTE (POST /reports/generate)
+  // ───────────────────────────────────────────
+  const generarReporte = async (tipo: TipoReporte) => {
     setOpenDropdown(null);
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      mostrarToast("No hay sesión iniciada.");
+      return;
+    }
+
+    setGenerando(true);
+    mostrarToast(`Generando reporte de ${tipo.label}...`);
+
+    try {
+      const response = await fetch(`${API_URL}/reports/generate`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tipo: tipo.value, formato: "xlsx" }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || `Error ${response.status}`);
+      }
+
+      mostrarToast(`Reporte de ${tipo.label} generado correctamente.`);
+      await cargarReportes(); // refresca la tabla con el nuevo reporte
+    } catch (err) {
+      console.error(err);
+      mostrarToast(
+        err instanceof Error ? err.message : "No fue posible generar el reporte."
+      );
+    } finally {
+      setGenerando(false);
+    }
   };
 
-  const generarReporte = (formato: Formato) => {
-    console.log(`POST /reports/generate?format=${formato.value}`);
-    mostrarToast(`Generando reporte en ${formato.label}...`);
-    setOpenDropdown(null);
+  // ───────────────────────────────────────────
+  // DESCARGAR REPORTE (GET /reports/{id}/download)
+  // ───────────────────────────────────────────
+  const descargarReporte = async (report: Report) => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      mostrarToast("No hay sesión iniciada.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/reports/${report.id}/download`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error al descargar: ${response.status}`);
+      }
+
+      // Convierte la respuesta en un archivo descargable en el navegador
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${report.nombre}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      mostrarToast(`Descargando ${report.nombre}...`);
+    } catch (err) {
+      console.error(err);
+      mostrarToast("No fue posible descargar el reporte.");
+    }
   };
+
+  // ───────────────────────────────────────────
+  // ELIMINAR REPORTE (DELETE /reports/{id})
+  // ───────────────────────────────────────────
+  const eliminarReporte = async (report: Report) => {
+    const confirmar = window.confirm(`¿Eliminar "${report.nombre}"? Esta acción no se puede deshacer.`);
+    if (!confirmar) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      mostrarToast("No hay sesión iniciada.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/reports/${report.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error al eliminar: ${response.status}`);
+      }
+
+      mostrarToast(`"${report.nombre}" fue eliminado.`);
+      await cargarReportes(); // refresca la tabla
+    } catch (err) {
+      console.error(err);
+      mostrarToast("No fue posible eliminar el reporte.");
+    }
+  };
+
+  // ───────────────────────────────────────────
+  // LOADING
+  // ───────────────────────────────────────────
+  if (loading) {
+    return (
+      <div style={{ display: "flex", minHeight: "100vh", background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
+        <Sidebar />
+        <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", fontSize: 18, color: "#666" }}>
+          Cargando reportes...
+        </div>
+      </div>
+    );
+  }
+
+  // ───────────────────────────────────────────
+  // ERROR
+  // ───────────────────────────────────────────
+  if (error) {
+    return (
+      <div style={{ display: "flex", minHeight: "100vh", background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
+        <Sidebar />
+        <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center",
+          flexDirection: "column", gap: 10 }}>
+          <h2>Error</h2>
+          <p style={{ color: "#777" }}>{error}</p>
+          <button onClick={() => window.location.reload()} style={{ background: "#534AB7", color: "#fff",
+            border: "none", borderRadius: 8, padding: "10px 18px", cursor: "pointer" }}>
+            Intentar nuevamente
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
@@ -195,10 +392,12 @@ export default function Reports() {
           <button
             data-format-trigger
             onClick={(e) => toggleDropdown("header", e)}
+            disabled={generando}
             style={{ background: "#534AB7", color: "#fff", border: "none",
-              borderRadius: 8, padding: "8px 18px", cursor: "pointer", fontSize: 14 }}
+              borderRadius: 8, padding: "8px 18px", cursor: generando ? "default" : "pointer",
+              fontSize: 14, opacity: generando ? 0.7 : 1 }}
           >
-            + Generar reporte
+            {generando ? "Generando..." : "+ Generar reporte"}
           </button>
         </header>
 
@@ -207,19 +406,22 @@ export default function Reports() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#f9f9f9", borderBottom: "0.5px solid #e0e0e0" }}>
-                  {["ID", "Reporte", "Tipo", "Fecha de generación", "Estado", ""].map((h) => (
+                  {["Reporte", "Tipo", "Fecha de generación", "Estado", "", ""].map((h) => (
                     <th key={h} style={{ padding: "10px 16px", textAlign: "left",
                       fontWeight: 500, color: "#666", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {REPORTS.map((r, i) => {
+                {reports.length === 0 ? (
+                  <tr><td colSpan={6} style={{ padding: "2rem", textAlign: "center", color: "#aaa" }}>
+                    No hay reportes generados todavía
+                  </td></tr>
+                ) : reports.map((r, i) => {
                   const s = ESTADO_STYLE[r.estado];
                   return (
                     <tr key={r.id} style={{ borderBottom: "0.5px solid #f0f0f0",
                       background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                      <td style={{ padding: "12px 16px", color: "#888", fontWeight: 500 }}>{r.id}</td>
                       <td style={{ padding: "12px 16px", fontWeight: 500 }}>{r.nombre}</td>
                       <td style={{ padding: "12px 16px", color: "#555" }}>{r.tipo}</td>
                       <td style={{ padding: "12px 16px", color: "#555" }}>{r.fecha}</td>
@@ -232,17 +434,26 @@ export default function Reports() {
                       <td style={{ padding: "12px 16px" }}>
                         {r.estado === "listo" ? (
                           <button
-                            data-format-trigger
-                            onClick={(e) => toggleDropdown(r.id, e)}
+                            onClick={() => descargarReporte(r)}
                             style={{ background: "transparent", border: "0.5px solid #534AB7",
                               borderRadius: 6, padding: "4px 12px", cursor: "pointer",
                               fontSize: 12, color: "#534AB7", fontWeight: 500 }}
                           >
-                            Exportar ▾
+                            Descargar
                           </button>
                         ) : (
                           <span style={{ fontSize: 12, color: "#bbb" }}>—</span>
                         )}
+                      </td>
+                      <td style={{ padding: "12px 16px" }}>
+                        <button
+                          onClick={() => eliminarReporte(r)}
+                          style={{ background: "transparent", border: "0.5px solid #E24B4A",
+                            borderRadius: 6, padding: "4px 12px", cursor: "pointer",
+                            fontSize: 12, color: "#E24B4A", fontWeight: 500 }}
+                        >
+                          Eliminar
+                        </button>
                       </td>
                     </tr>
                   );
@@ -252,19 +463,15 @@ export default function Reports() {
           </div>
 
           <p style={{ margin: 0, fontSize: 12, color: "#aaa" }}>
-            Mostrando {REPORTS.length} reportes
+            Mostrando {reports.length} reportes
           </p>
         </main>
       </div>
 
-      {openDropdown && (
-        <FormatDropdown
+      {openDropdown?.id === "header" && (
+        <TipoDropdown
           rect={openDropdown.rect}
-          onSelect={(formato) =>
-            openDropdown.id === "header"
-              ? generarReporte(formato)
-              : exportarReporte(openDropdown.id, formato)
-          }
+          onSelect={(tipo) => generarReporte(tipo)}
         />
       )}
 

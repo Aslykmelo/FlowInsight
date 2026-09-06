@@ -22,6 +22,8 @@ class Usuario(Base):
     nombre_usuario = Column(String(100), nullable=False)
     contrasena = Column(String(255), nullable=False)
     correo = Column(String(150), unique=True, nullable=False)
+    estado = Column(String(20), default="activo")      
+    ultima_sesion = Column(DateTime, nullable=True)      
 
     rol = relationship("Rol", back_populates="usuarios")
 
@@ -34,6 +36,7 @@ class Cliente(Base):
     telefono = Column(String(20))
     correo = Column(String(150))
     direccion = Column(String(255))
+    ciudad = Column(String(100), nullable=True)
     fecha_registro = Column(DateTime, default=datetime.utcnow)
     autorizacion_datos = Column(Boolean, default=False)
 
@@ -140,3 +143,6 @@ class ReporteGenerado(Base):
     fecha = Column(DateTime, default=datetime.utcnow)
     formato = Column(String(20))
     estado = Column(String(50))
+    nombre = Column(String(200))        
+    tipo = Column(String(50))           
+    archivo_path = Column(String(500)) 

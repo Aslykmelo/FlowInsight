@@ -79,6 +79,7 @@ def listar_clientes_resumen(
             "correo": cliente.correo,
             "direccion": cliente.direccion,
             "ciudad": cliente.ciudad,
+            "localidad": cliente.localidad,
             "total_pedidos": total_pedidos,
             "monto_total": monto_total,
             "ultima_compra": ultima_compra,

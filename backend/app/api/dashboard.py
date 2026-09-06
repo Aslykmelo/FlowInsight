@@ -18,7 +18,35 @@ from app.schemas.dashboard import (
     ProductoTop,
     VentaPorCanal,
 )
+from app.schemas.mapa import VentaLocalidad
 from app.core.dependencies import get_current_user
+
+
+# ============================================================
+# Coordenadas reales (centroide aproximado) de cada localidad
+# de Bogota, usadas para ubicar los puntos del mapa de ventas.
+# ============================================================
+CENTROIDES_LOCALIDADES = {
+    "Usaquen": (4.6946, -74.0307),
+    "Chapinero": (4.6488, -74.0648),
+    "Santa Fe": (4.6097, -74.0817),
+    "San Cristobal": (4.5573, -74.0817),
+    "Usme": (4.4692, -74.1258),
+    "Tunjuelito": (4.5722, -74.1436),
+    "Bosa": (4.6182, -74.1773),
+    "Kennedy": (4.6280, -74.1567),
+    "Fontibon": (4.6728, -74.1466),
+    "Engativa": (4.7100, -74.1136),
+    "Suba": (4.7420, -74.0837),
+    "Barrios Unidos": (4.6690, -74.0836),
+    "Teusaquillo": (4.6378, -74.0938),
+    "Los Martires": (4.6042, -74.0910),
+    "Antonio Nariño": (4.5900, -74.0996),
+    "Puente Aranda": (4.6157, -74.1136),
+    "La Candelaria": (4.5967, -74.0750),
+    "Rafael Uribe Uribe": (4.5580, -74.1130),
+    "Ciudad Bolivar": (4.5000, -74.1500),
+}
 
 
 router = APIRouter(
@@ -256,4 +284,40 @@ def ventas_por_canal(
             "ingresos": float(r.ingresos or 0),
         }
         for r in resultados
+    ]
+
+
+# ============================================================
+# VENTAS POR LOCALIDAD (MAPA DE BOGOTA)
+# ============================================================
+
+@router.get("/ventas-por-localidad", response_model=list[VentaLocalidad])
+def ventas_por_localidad(
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_current_user),
+):
+    resultados = (
+        db.query(
+            Cliente.localidad,
+            func.count(func.distinct(Cliente.id_cliente)).label("total_clientes"),
+            func.count(Pedido.id_pedido).label("total_pedidos"),
+            func.sum(Pedido.total).label("ingresos"),
+        )
+        .join(Pedido, Pedido.id_cliente == Cliente.id_cliente)
+        .filter(Cliente.localidad.isnot(None))
+        .group_by(Cliente.localidad)
+        .all()
+    )
+
+    return [
+        {
+            "localidad": r.localidad,
+            "lat": CENTROIDES_LOCALIDADES[r.localidad][0],
+            "lng": CENTROIDES_LOCALIDADES[r.localidad][1],
+            "total_clientes": r.total_clientes,
+            "total_pedidos": r.total_pedidos,
+            "ingresos": float(r.ingresos or 0),
+        }
+        for r in resultados
+        if r.localidad in CENTROIDES_LOCALIDADES
     ]

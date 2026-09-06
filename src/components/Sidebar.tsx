@@ -7,6 +7,7 @@ const NAV = [
   { emoji:"👥", label:"Clientes",     path:"/clients"      },
   { emoji:"📄", label:"Reportes",     path:"/reports"      },
   { emoji:"💬", label:"Promociones",  path:"/promotions"   },
+  { emoji:"🗺️", label:"Mapa Bogotá",  path:"/sales-map"    },
   { emoji:"⚙️", label:"Usuarios",     path:"/users"        },
 ];
 export default function Sidebar() {

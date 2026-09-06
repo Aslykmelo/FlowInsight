@@ -35,8 +35,17 @@ const LABEL_SEGMENTO: Record<string, string> = {
 const NOMBRES_MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
 const EXTENSION_OBJETIVO = 4.6;
-const RELLENO_CELDA = 0.82;
-const COLOR_VACIO = "#dcdce4";
+const RELLENO_CELDA = 0.96;
+const COLOR_VACIO = "#c7c7d6";
+
+function aclararColor(hex: string, factor: number): string {
+  const num = parseInt(hex.slice(1), 16);
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  const mezclar = (canal: number) => Math.round(canal + (255 - canal) * factor);
+  return `rgb(${mezclar(r)}, ${mezclar(g)}, ${mezclar(b)})`;
+}
 
 const formatoCOP = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -72,8 +81,10 @@ function Cubelet({
   setHover: (c: CeldaGrid | null) => void;
 }) {
   const activo = hover === celda;
-  const color = celda.vacio ? COLOR_VACIO : COLOR_SEGMENTO[celda.segmento];
-  const opacidad = celda.vacio ? 0.1 : 0.32 + intensidad * 0.68;
+  // La intensidad de venta se ve en el tono del color (mas palido = menos
+  // venta), no en la transparencia, para que el bloque se vea solido.
+  const color = celda.vacio ? COLOR_VACIO : aclararColor(COLOR_SEGMENTO[celda.segmento], 0.55 - intensidad * 0.5);
+  const opacidad = celda.vacio ? 0.55 : 1;
 
   return (
     <mesh
@@ -86,11 +97,13 @@ function Cubelet({
     >
       <boxGeometry args={tamano} />
       <meshStandardMaterial
-        color={color}
+        color={activo ? COLOR_SEGMENTO[celda.segmento] : color}
         transparent
-        opacity={activo ? 1 : opacidad}
-        emissive={activo ? color : "#000000"}
-        emissiveIntensity={activo ? 0.8 : intensidad * 0.3}
+        opacity={opacidad}
+        roughness={0.45}
+        metalness={0.05}
+        emissive={activo ? COLOR_SEGMENTO[celda.segmento] : "#000000"}
+        emissiveIntensity={activo ? 0.5 : 0}
       />
       {activo && (
         <Html position={[0, tamano[1], 0]} center distanceFactor={10} style={{ pointerEvents: "none" }}>
@@ -172,9 +185,9 @@ function Escena({
 
   return (
     <>
-      <ambientLight intensity={0.85} />
-      <directionalLight position={[10, 15, 10]} intensity={0.7} />
-      <directionalLight position={[-10, -5, -10]} intensity={0.25} />
+      <ambientLight intensity={0.55} />
+      <directionalLight position={[10, 15, 10]} intensity={1} />
+      <directionalLight position={[-10, -5, -10]} intensity={0.35} />
 
       {/* Ticks numerados eje Producto (X) */}
       {productos.map((_, i) => (

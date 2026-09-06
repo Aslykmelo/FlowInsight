@@ -66,7 +66,25 @@ interface ChurnRisk {
   alto_riesgo: number;
 }
 
-type WidgetId = "kpis" | "ventas_prediccion" | "ventas_mensuales" | "riesgo_abandono";
+interface ProductoTop {
+  producto: string;
+  unidades_vendidas: number;
+  ingresos: number;
+}
+
+interface VentaCanal {
+  canal: string;
+  total_pedidos: number;
+  ingresos: number;
+}
+
+type WidgetId =
+  | "kpis"
+  | "ventas_prediccion"
+  | "ventas_mensuales"
+  | "riesgo_abandono"
+  | "top_productos"
+  | "ventas_canal";
 
 interface WidgetDef {
   id: WidgetId;
@@ -78,6 +96,8 @@ const WIDGETS: WidgetDef[] = [
   { id: "ventas_prediccion", label: "Ventas reales vs Predicción ML" },
   { id: "ventas_mensuales", label: "Ventas mensuales" },
   { id: "riesgo_abandono", label: "Riesgo de abandono" },
+  { id: "top_productos", label: "Productos más vendidos" },
+  { id: "ventas_canal", label: "Ventas por canal" },
 ];
 
 const WIDGETS_STORAGE_KEY = "flowinsight_dashboard_widgets";
@@ -142,6 +162,8 @@ export default function Dashboard() {
   const [kpis, setKpis] = useState<ApiKPI | null>(null);
   const [salesData, setSalesData] = useState<SalesPoint[]>([]);
   const [churnRisk, setChurnRisk] = useState<ChurnRisk | null>(null);
+  const [topProductos, setTopProductos] = useState<ProductoTop[]>([]);
+  const [ventasCanal, setVentasCanal] = useState<VentaCanal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -163,6 +185,8 @@ export default function Dashboard() {
       ventas_prediccion: true,
       ventas_mensuales: false,
       riesgo_abandono: false,
+      top_productos: false,
+      ventas_canal: false,
     };
   });
 
@@ -230,6 +254,16 @@ export default function Dashboard() {
         if (!churnResponse.ok) throw new Error(`Error al obtener riesgo de abandono: ${churnResponse.status}`);
         const churnData: ChurnRisk = await churnResponse.json();
         setChurnRisk(churnData);
+
+        const topProductosResponse = await fetch(`${API_URL}/dashboard/top-productos`, { method: "GET", headers });
+        if (!topProductosResponse.ok) throw new Error(`Error al obtener productos: ${topProductosResponse.status}`);
+        const topProductosData: ProductoTop[] = await topProductosResponse.json();
+        setTopProductos(topProductosData);
+
+        const ventasCanalResponse = await fetch(`${API_URL}/dashboard/ventas-por-canal`, { method: "GET", headers });
+        if (!ventasCanalResponse.ok) throw new Error(`Error al obtener ventas por canal: ${ventasCanalResponse.status}`);
+        const ventasCanalData: VentaCanal[] = await ventasCanalResponse.json();
+        setVentasCanal(ventasCanalData);
       } catch (err) {
         console.error("Error cargando Dashboard:", err);
         setError("No fue posible cargar la información del dashboard.");
@@ -358,6 +392,73 @@ export default function Dashboard() {
               <Bar dataKey="ventas" fill="#534AB7" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
+        </Card>
+      );
+    }
+
+    if (id === "top_productos") {
+      return (
+        <Card key={id} title="Productos más vendidos">
+          <ResponsiveContainer width="100%" height={Math.max(200, topProductos.length * 44)}>
+            <BarChart data={topProductos} layout="vertical" margin={{ left: 24 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis type="number" tick={{ fontSize: 13 }} tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
+              <YAxis type="category" dataKey="producto" tick={{ fontSize: 12 }} width={160} />
+              <Tooltip
+                formatter={(value: number, name: string) =>
+                  name === "ingresos" ? [formatoMoneda(value), "Ingresos"] : [value, "Unidades"]
+                }
+              />
+              <Bar dataKey="ingresos" fill="#0F6E56" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      );
+    }
+
+    if (id === "ventas_canal") {
+      const coloresCanal = ["#534AB7", "#0F6E56", "#BA7517", "#993C1D", "#1D6E9E"];
+      const donutCanal = {
+        labels: ventasCanal.map((v) => v.canal),
+        datasets: [
+          {
+            data: ventasCanal.map((v) => v.ingresos),
+            backgroundColor: ventasCanal.map((_, i) => coloresCanal[i % coloresCanal.length]),
+            borderWidth: 0,
+          },
+        ],
+      };
+
+      return (
+        <Card key={id} title="Ventas por canal">
+          <div style={{ maxWidth: 220, margin: "0 auto" }}>
+            <Doughnut
+              data={donutCanal}
+              options={{
+                plugins: { legend: { position: "bottom", labels: { font: { size: 12 }, padding: 12 } } },
+                cutout: "60%",
+              }}
+            />
+          </div>
+          <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: 8 }}>
+            {ventasCanal.map((v, i) => (
+              <div key={v.canal} style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6, color: "#555", textTransform: "capitalize" }}>
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: coloresCanal[i % coloresCanal.length],
+                      display: "inline-block",
+                    }}
+                  />
+                  {v.canal}
+                </span>
+                <span style={{ fontWeight: 500 }}>{v.total_pedidos} pedidos</span>
+              </div>
+            ))}
+          </div>
         </Card>
       );
     }

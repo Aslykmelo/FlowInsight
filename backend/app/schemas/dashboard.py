@@ -19,3 +19,15 @@ class RiesgoAbandonoOut(BaseModel):
     bajo_riesgo: int
     riesgo_medio: int
     alto_riesgo: int
+
+
+class ProductoTop(BaseModel):
+    producto: str
+    unidades_vendidas: int
+    ingresos: float
+
+
+class VentaPorCanal(BaseModel):
+    canal: str
+    total_pedidos: int
+    ingresos: float

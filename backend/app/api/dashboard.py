@@ -8,11 +8,15 @@ from app.models.models import (
     Cliente,
     Usuario,
     PrediccionCliente,
+    DetallePedido,
+    Producto,
 )
 from app.schemas.dashboard import (
     KPIsOut,
     VentaDiaria,
     RiesgoAbandonoOut,
+    ProductoTop,
+    VentaPorCanal,
 )
 from app.core.dependencies import get_current_user
 
@@ -190,3 +194,66 @@ def riesgo_abandono(
         riesgo_medio=riesgo_medio,
         alto_riesgo=alto_riesgo,
     )
+
+
+# ============================================================
+# PRODUCTOS MAS VENDIDOS
+# ============================================================
+
+@router.get("/top-productos", response_model=list[ProductoTop])
+def productos_mas_vendidos(
+    limite: int = 5,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_current_user),
+):
+    resultados = (
+        db.query(
+            Producto.nombre_producto.label("producto"),
+            func.sum(DetallePedido.cantidad).label("unidades_vendidas"),
+            func.sum(DetallePedido.subtotal).label("ingresos"),
+        )
+        .join(Producto, DetallePedido.id_producto == Producto.id_producto)
+        .group_by(Producto.nombre_producto)
+        .order_by(func.sum(DetallePedido.subtotal).desc())
+        .limit(limite)
+        .all()
+    )
+
+    return [
+        {
+            "producto": r.producto,
+            "unidades_vendidas": int(r.unidades_vendidas or 0),
+            "ingresos": float(r.ingresos or 0),
+        }
+        for r in resultados
+    ]
+
+
+# ============================================================
+# VENTAS POR CANAL
+# ============================================================
+
+@router.get("/ventas-por-canal", response_model=list[VentaPorCanal])
+def ventas_por_canal(
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_current_user),
+):
+    resultados = (
+        db.query(
+            Pedido.canal,
+            func.count(Pedido.id_pedido).label("total_pedidos"),
+            func.sum(Pedido.total).label("ingresos"),
+        )
+        .group_by(Pedido.canal)
+        .order_by(func.sum(Pedido.total).desc())
+        .all()
+    )
+
+    return [
+        {
+            "canal": r.canal or "Sin especificar",
+            "total_pedidos": r.total_pedidos,
+            "ingresos": float(r.ingresos or 0),
+        }
+        for r in resultados
+    ]

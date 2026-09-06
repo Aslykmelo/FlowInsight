@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -18,5 +19,15 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Correo o contraseña incorrectos",
         )
+
+    if usuario.estado == "inactivo":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu usuario está inactivo. Contacta a un administrador.",
+        )
+
+    usuario.ultima_sesion = datetime.now()
+    db.commit()
+
     token = create_access_token({"sub": str(usuario.id_usuario)})
     return Token(access_token=token)

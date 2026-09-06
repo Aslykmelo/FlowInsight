@@ -37,7 +37,24 @@ def get_current_user(
         if usuario is None:
             raise credentials_exception
 
+        if usuario.estado == "inactivo":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tu usuario está inactivo. Contacta a un administrador.",
+            )
+
         return usuario
 
+    except HTTPException:
+        raise
     except Exception:
         raise credentials_exception
+
+
+def require_admin(usuario: Usuario = Depends(get_current_user)) -> Usuario:
+    if not usuario.rol or usuario.rol.nombre_rol != "Administrador":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo un administrador puede realizar esta acción",
+        )
+    return usuario

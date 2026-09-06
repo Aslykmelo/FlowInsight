@@ -229,9 +229,13 @@ export default function Dashboard() {
 
             const numeroMes = Number(partes[1]);
 
-            const mes =
+            const anio = partes[0].slice(-2);
+
+            const nombreMes =
               nombresMeses[numeroMes - 1] ||
               item.fecha;
+
+            const mes = `${nombreMes} ${anio}`;
 
             const ventas = Number(item.ingresos);
 

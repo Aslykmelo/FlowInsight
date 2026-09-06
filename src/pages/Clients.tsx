@@ -1,34 +1,36 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
 
 // ─── Types ────────────────────────────────────────────
 interface Client {
-  id: string;
+  id: number;
   nombre: string;
   telefono: string;
+  correo: string;
   ciudad: string;
   totalPedidos: number;
-  montoTotal: string;
-  ultimaCompra: string;
-  intervalo: number;
+  montoTotal: number;
+  ultimaCompraISO: string | null;   // fecha real, para filtrar/ordenar
+  ultimaCompra: string;             // fecha ya formateada, para mostrar
+  intervalo: number | null;
   estado: "activo" | "en riesgo" | "inactivo";
 }
 
-// ─── Mock data — clientes W&T Food ───────────────────
-const CLIENTS: Client[] = [
-  { id:"CLI001", nombre:"Restaurante El Fogón",     telefono:"601 234 5678", ciudad:"Bogotá",    totalPedidos:24, montoTotal:"$4.320.000",  ultimaCompra:"15/04/2026", intervalo:12, estado:"activo"    },
-  { id:"CLI002", nombre:"Cafetería Central",         telefono:"601 345 6789", ciudad:"Bogotá",    totalPedidos:8,  montoTotal:"$980.000",    ultimaCompra:"02/04/2026", intervalo:28, estado:"en riesgo" },
-  { id:"CLI003", nombre:"Hotel Dann Carlton",        telefono:"601 456 7890", ciudad:"Bogotá",    totalPedidos:36, montoTotal:"$12.500.000", ultimaCompra:"20/04/2026", intervalo:10, estado:"activo"    },
-  { id:"CLI004", nombre:"Panadería La Espiga",       telefono:"604 567 8901", ciudad:"Medellín",  totalPedidos:15, montoTotal:"$2.100.000",  ultimaCompra:"10/04/2026", intervalo:14, estado:"activo"    },
-  { id:"CLI005", nombre:"Supermercado Éxito Norte",  telefono:"601 678 9012", ciudad:"Bogotá",    totalPedidos:4,  montoTotal:"$560.000",    ultimaCompra:"25/03/2026", intervalo:45, estado:"en riesgo" },
-  { id:"CLI006", nombre:"Club El Nogal",             telefono:"601 789 0123", ciudad:"Bogotá",    totalPedidos:48, montoTotal:"$18.200.000", ultimaCompra:"18/04/2026", intervalo:7,  estado:"activo"    },
-  { id:"CLI007", nombre:"Colegio Los Alpes",         telefono:"601 890 1234", ciudad:"Bogotá",    totalPedidos:10, montoTotal:"$1.450.000",  ultimaCompra:"05/04/2026", intervalo:21, estado:"activo"    },
-  { id:"CLI008", nombre:"Clínica Shaio",             telefono:"601 901 2345", ciudad:"Bogotá",    totalPedidos:22, montoTotal:"$5.800.000",  ultimaCompra:"12/04/2026", intervalo:15, estado:"activo"    },
-  { id:"CLI009", nombre:"Bar La Candelaria",         telefono:"601 012 3456", ciudad:"Bogotá",    totalPedidos:2,  montoTotal:"$210.000",    ultimaCompra:"01/03/2026", intervalo:60, estado:"inactivo"  },
-  { id:"CLI010", nombre:"Jardín Infantil Semillas",  telefono:"605 123 4567", ciudad:"Cali",      totalPedidos:18, montoTotal:"$2.900.000",  ultimaCompra:"22/04/2026", intervalo:8,  estado:"activo"    },
-  { id:"CLI011", nombre:"Fonda Paisa Doña Rosa",     telefono:"604 234 5678", ciudad:"Medellín",  totalPedidos:30, montoTotal:"$6.100.000",  ultimaCompra:"19/04/2026", intervalo:11, estado:"activo"    },
-  { id:"CLI012", nombre:"Centro Comercial Andino",   telefono:"601 345 6780", ciudad:"Bogotá",    totalPedidos:1,  montoTotal:"$80.000",     ultimaCompra:"10/02/2026", intervalo:75, estado:"inactivo"  },
-];
+interface ApiClienteResumen {
+  id_cliente: number;
+  nombre_cliente: string;
+  telefono: string | null;
+  correo: string | null;
+  direccion: string | null;
+  ciudad: string | null;
+  total_pedidos: number;
+  monto_total: number;
+  ultima_compra: string | null;
+  intervalo_promedio: number | null;
+  estado: "activo" | "en riesgo" | "inactivo";
+}
+
+const API_URL = "http://127.0.0.1:8000";
 
 const ESTADO_STYLE: Record<string, { color: string; bg: string }> = {
   "activo":    { color:"#0F6E56", bg:"#E1F5EE" },
@@ -36,13 +38,16 @@ const ESTADO_STYLE: Record<string, { color: string; bg: string }> = {
   "inactivo":  { color:"#993C1D", bg:"#FAECE7" },
 };
 
-// ─── Ciudades disponibles (derivadas de los clientes) ─
-const CIUDADES = Array.from(new Set(CLIENTS.map(c => c.ciudad))).sort();
+// ─── Helpers de formato ───────────────────────────────
+const formatoMoneda = (valor: number) =>
+  valor.toLocaleString("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 });
 
-// ─── "DD/MM/AAAA" → "AAAAMMDD" para comparar fechas sin líos de huso horario ─
-function fechaComparable(fecha: string): string {
-  const [d, m, y] = fecha.split("/");
-  return `${y}${m.padStart(2, "0")}${d.padStart(2, "0")}`;
+const formatoFecha = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
+
+// "YYYY-MM-DDTHH:mm:ss" → "YYYYMMDD", para comparar fechas sin líos de huso horario
+function fechaComparable(iso: string): string {
+  return iso.slice(0, 10).replace(/-/g, "");
 }
 
 // ─── Modal detalle cliente ────────────────────────────
@@ -65,7 +70,7 @@ function ClientModal({ client, onClose }: { client: Client; onClose: () => void 
             </div>
             <div>
               <p style={{ margin:0, fontSize:16, fontWeight:500 }}>{client.nombre}</p>
-              <p style={{ margin:0, fontSize:12, color:"#888" }}>{client.id}</p>
+              <p style={{ margin:0, fontSize:12, color:"#888" }}>ID {client.id}</p>
             </div>
           </div>
           <button onClick={onClose} style={{ background:"transparent", border:"none",
@@ -73,12 +78,13 @@ function ClientModal({ client, onClose }: { client: Client; onClose: () => void 
         </div>
 
         {[
-          { label:"Teléfono",            value: client.telefono },
-          { label:"Ciudad",              value: client.ciudad },
+          { label:"Teléfono",            value: client.telefono || "—" },
+          { label:"Correo",              value: client.correo || "—" },
+          { label:"Ciudad",              value: client.ciudad || "—" },
           { label:"Total pedidos",       value: `${client.totalPedidos} pedidos` },
-          { label:"Monto total",         value: client.montoTotal },
+          { label:"Monto total",         value: formatoMoneda(client.montoTotal) },
           { label:"Última compra",       value: client.ultimaCompra },
-          { label:"Intervalo promedio",  value: `${client.intervalo} días entre compras` },
+          { label:"Intervalo promedio",  value: client.intervalo != null ? `${client.intervalo} días entre compras` : "—" },
         ].map(row => (
           <div key={row.label} style={{ display:"flex", justifyContent:"space-between",
             padding:"10px 0", borderBottom:"0.5px solid #f0f0f0", fontSize:14 }}>
@@ -107,6 +113,10 @@ function ClientModal({ client, onClose }: { client: Client; onClose: () => void 
 
 // ─── Clients Page ─────────────────────────────────────
 export default function Clients() {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
   const [busqueda, setBusqueda]   = useState("");
   const [filtro, setFiltro]       = useState<"todos" | "activo" | "en riesgo" | "inactivo">("todos");
   const [selected, setSelected]   = useState<Client | null>(null);
@@ -116,6 +126,61 @@ export default function Clients() {
   const [fechaHasta, setFechaHasta]     = useState("");
   const [intervaloMin, setIntervaloMin] = useState("");
   const [intervaloMax, setIntervaloMax] = useState("");
+
+  // ───────────────────────────────────────────
+  // CARGAR DATOS DEL BACKEND
+  // ───────────────────────────────────────────
+  useEffect(() => {
+    const cargarClientes = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const token = localStorage.getItem("token");
+        if (!token) {
+          setError("No hay sesión iniciada.");
+          return;
+        }
+
+        const response = await fetch(`${API_URL}/clientes/resumen`, {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Error al obtener clientes: ${response.status}`);
+        }
+
+        const data: ApiClienteResumen[] = await response.json();
+
+        const clientesFormateados: Client[] = data.map((c) => ({
+          id: c.id_cliente,
+          nombre: c.nombre_cliente,
+          telefono: c.telefono || "—",
+          correo: c.correo || "—",
+          ciudad: c.ciudad || "Sin ciudad",
+          totalPedidos: c.total_pedidos,
+          montoTotal: c.monto_total,
+          ultimaCompraISO: c.ultima_compra,
+          ultimaCompra: formatoFecha(c.ultima_compra),
+          intervalo: c.intervalo_promedio,
+          estado: c.estado,
+        }));
+
+        setClients(clientesFormateados);
+      } catch (err) {
+        console.error(err);
+        setError("No fue posible cargar la información de clientes.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    cargarClientes();
+  }, []);
+
+  // Ciudades disponibles, derivadas de los clientes reales
+  const CIUDADES = Array.from(new Set(clients.map(c => c.ciudad))).sort();
 
   const hayFiltrosActivos =
     busqueda !== "" || filtro !== "todos" || ciudad !== "todas" ||
@@ -131,32 +196,68 @@ export default function Clients() {
     setIntervaloMax("");
   };
 
-  const datos = CLIENTS
+  const datos = clients
     .filter(c => filtro === "todos" || c.estado === filtro)
     .filter(c => ciudad === "todas" || c.ciudad === ciudad)
     .filter(c => {
       if (!fechaDesde && !fechaHasta) return true;
-      const fc = fechaComparable(c.ultimaCompra);
+      if (!c.ultimaCompraISO) return false; // sin fecha, no se puede comparar
+      const fc = fechaComparable(c.ultimaCompraISO);
       if (fechaDesde && fc < fechaDesde.replace(/-/g, "")) return false;
       if (fechaHasta && fc > fechaHasta.replace(/-/g, "")) return false;
       return true;
     })
     .filter(c => {
+      if (intervaloMin === "" && intervaloMax === "") return true;
+      if (c.intervalo == null) return false; // sin intervalo (1 solo pedido), no se puede comparar
       if (intervaloMin !== "" && c.intervalo < Number(intervaloMin)) return false;
       if (intervaloMax !== "" && c.intervalo > Number(intervaloMax)) return false;
       return true;
     })
     .filter(c =>
       c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-      c.id.toLowerCase().includes(busqueda.toLowerCase()) ||
       c.ciudad.toLowerCase().includes(busqueda.toLowerCase())
     );
 
   const conteo = {
-    activo:    CLIENTS.filter(c => c.estado === "activo").length,
-    enRiesgo:  CLIENTS.filter(c => c.estado === "en riesgo").length,
-    inactivo:  CLIENTS.filter(c => c.estado === "inactivo").length,
+    activo:    clients.filter(c => c.estado === "activo").length,
+    enRiesgo:  clients.filter(c => c.estado === "en riesgo").length,
+    inactivo:  clients.filter(c => c.estado === "inactivo").length,
   };
+
+  // ───────────────────────────────────────────
+  // LOADING
+  // ───────────────────────────────────────────
+  if (loading) {
+    return (
+      <div style={{ display:"flex", minHeight:"100vh", background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+        <Sidebar />
+        <div style={{ flex:1, display:"flex", justifyContent:"center", alignItems:"center", fontSize:18, color:"#666" }}>
+          Cargando clientes...
+        </div>
+      </div>
+    );
+  }
+
+  // ───────────────────────────────────────────
+  // ERROR
+  // ───────────────────────────────────────────
+  if (error) {
+    return (
+      <div style={{ display:"flex", minHeight:"100vh", background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+        <Sidebar />
+        <div style={{ flex:1, display:"flex", justifyContent:"center", alignItems:"center",
+          flexDirection:"column", gap:10 }}>
+          <h2>Error</h2>
+          <p style={{ color:"#777" }}>{error}</p>
+          <button onClick={() => window.location.reload()} style={{ background:"#534AB7", color:"#fff",
+            border:"none", borderRadius:8, padding:"10px 18px", cursor:"pointer" }}>
+            Intentar nuevamente
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display:"flex", minHeight:"100vh", background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
@@ -174,7 +275,7 @@ export default function Clients() {
           </div>
           <span style={{ fontSize:13, color:"#888", background:"#f0f0f0",
             padding:"6px 14px", borderRadius:8 }}>
-            {CLIENTS.length} clientes registrados
+            {clients.length} clientes registrados
           </span>
         </header>
 
@@ -200,7 +301,7 @@ export default function Clients() {
 
           {/* Búsqueda y filtros */}
           <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
-            <input type="text" placeholder="Buscar por nombre, ID o ciudad..."
+            <input type="text" placeholder="Buscar por nombre o ciudad..."
               value={busqueda} onChange={e => setBusqueda(e.target.value)}
               style={{ flex:1, minWidth:220, border:"0.5px solid #e0e0e0", borderRadius:8,
                 padding:"8px 12px", fontSize:14, outline:"none",
@@ -276,7 +377,7 @@ export default function Clients() {
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
               <thead>
                 <tr style={{ background:"#f9f9f9", borderBottom:"0.5px solid #e0e0e0" }}>
-                  {["ID","Cliente","Ciudad","Pedidos","Monto total","Última compra","Intervalo","Estado",""].map(h => (
+                  {["Cliente","Ciudad","Pedidos","Monto total","Última compra","Intervalo","Estado",""].map(h => (
                     <th key={h} style={{ padding:"10px 16px", textAlign:"left",
                       fontWeight:500, color:"#666", whiteSpace:"nowrap" }}>{h}</th>
                   ))}
@@ -284,7 +385,7 @@ export default function Clients() {
               </thead>
               <tbody>
                 {datos.length === 0 ? (
-                  <tr><td colSpan={9} style={{ padding:"2rem", textAlign:"center", color:"#aaa" }}>
+                  <tr><td colSpan={8} style={{ padding:"2rem", textAlign:"center", color:"#aaa" }}>
                     No se encontraron clientes
                   </td></tr>
                 ) : datos.map((c, i) => {
@@ -292,7 +393,6 @@ export default function Clients() {
                   return (
                     <tr key={c.id} style={{ borderBottom:"0.5px solid #f0f0f0",
                       background: i % 2 === 0 ? "#fff":"#fafafa" }}>
-                      <td style={{ padding:"12px 16px", color:"#888", fontWeight:500 }}>{c.id}</td>
                       <td style={{ padding:"12px 16px" }}>
                         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                           <div style={{ width:32, height:32, borderRadius:"50%", background:"#EEEDFE",
@@ -305,9 +405,9 @@ export default function Clients() {
                       </td>
                       <td style={{ padding:"12px 16px", color:"#555" }}>{c.ciudad}</td>
                       <td style={{ padding:"12px 16px", color:"#555", textAlign:"center" }}>{c.totalPedidos}</td>
-                      <td style={{ padding:"12px 16px", fontWeight:500, color:"#0F6E56" }}>{c.montoTotal}</td>
+                      <td style={{ padding:"12px 16px", fontWeight:500, color:"#0F6E56" }}>{formatoMoneda(c.montoTotal)}</td>
                       <td style={{ padding:"12px 16px", color:"#555" }}>{c.ultimaCompra}</td>
-                      <td style={{ padding:"12px 16px", color:"#555" }}>{c.intervalo} días</td>
+                      <td style={{ padding:"12px 16px", color:"#555" }}>{c.intervalo != null ? `${c.intervalo} días` : "—"}</td>
                       <td style={{ padding:"12px 16px" }}>
                         <span style={{ fontSize:12, color:s.color, background:s.bg,
                           padding:"3px 10px", borderRadius:6, fontWeight:500 }}>
@@ -330,7 +430,7 @@ export default function Clients() {
           </div>
 
           <p style={{ margin:0, fontSize:12, color:"#aaa" }}>
-            Mostrando {datos.length} de {CLIENTS.length} clientes
+            Mostrando {datos.length} de {clients.length} clientes
           </p>
         </main>
       </div>

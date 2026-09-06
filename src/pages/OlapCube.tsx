@@ -34,11 +34,9 @@ const LABEL_SEGMENTO: Record<string, string> = {
 
 const NOMBRES_MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
-const PRODUCT_SPACING = 1.6;
-const MONTH_SPACING = 1.6;
-const SEGMENT_GAP = 0.32;
-const BAR_SIZE = 0.26;
-const MAX_ALTURA = 6;
+const EXTENSION_OBJETIVO = 4.6;
+const RELLENO_CELDA = 0.82;
+const COLOR_VACIO = "#dcdce4";
 
 const formatoCOP = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -46,43 +44,58 @@ const formatoCOP = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-function siglaProducto(productos: string[], nombre: string): string {
-  return `P${productos.indexOf(nombre) + 1}`;
+const dosDigitos = (n: number) => String(n).padStart(2, "0");
+
+interface CeldaGrid {
+  x: number;
+  y: number;
+  z: number;
+  producto: string;
+  mes: string;
+  segmento: string;
+  ingresos: number;
+  cantidad: number;
+  vacio: boolean;
 }
 
-function Barra({
-  x,
-  z,
-  altura,
-  color,
+function Cubelet({
   celda,
+  tamano,
+  intensidad,
   hover,
   setHover,
 }: {
-  x: number;
-  z: number;
-  altura: number;
-  color: string;
-  celda: Celda;
-  hover: Celda | null;
-  setHover: (c: Celda | null) => void;
+  celda: CeldaGrid;
+  tamano: [number, number, number];
+  intensidad: number;
+  hover: CeldaGrid | null;
+  setHover: (c: CeldaGrid | null) => void;
 }) {
   const activo = hover === celda;
+  const color = celda.vacio ? COLOR_VACIO : COLOR_SEGMENTO[celda.segmento];
+  const opacidad = celda.vacio ? 0.1 : 0.32 + intensidad * 0.68;
+
   return (
     <mesh
-      position={[x, altura / 2, z]}
+      position={[celda.x, celda.y, celda.z]}
       onPointerOver={(e) => {
         e.stopPropagation();
-        setHover(celda);
+        if (!celda.vacio) setHover(celda);
       }}
       onPointerOut={() => setHover(null)}
     >
-      <boxGeometry args={[BAR_SIZE, Math.max(altura, 0.02), BAR_SIZE]} />
-      <meshStandardMaterial color={color} emissive={activo ? color : "#000000"} emissiveIntensity={activo ? 0.6 : 0} />
+      <boxGeometry args={tamano} />
+      <meshStandardMaterial
+        color={color}
+        transparent
+        opacity={activo ? 1 : opacidad}
+        emissive={activo ? color : "#000000"}
+        emissiveIntensity={activo ? 0.8 : intensidad * 0.3}
+      />
       {activo && (
-        <Html position={[0, altura / 2 + 0.3, 0]} center distanceFactor={12} style={{ pointerEvents: "none" }}>
+        <Html position={[0, tamano[1], 0]} center distanceFactor={10} style={{ pointerEvents: "none" }}>
           <div style={{ background: "#fff", border: "0.5px solid #e0e0e0", borderRadius: 8, padding: "6px 10px",
-            fontSize: 11, whiteSpace: "nowrap", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", color: "#333" }}>
+            fontSize: 11, whiteSpace: "nowrap", boxShadow: "0 4px 12px rgba(0,0,0,0.18)", color: "#333" }}>
             <strong>{celda.producto}</strong>
             <br />
             {celda.mes} · {LABEL_SEGMENTO[celda.segmento]}
@@ -98,65 +111,124 @@ function Barra({
 function Escena({
   productos,
   mesesDelAnio,
-  celdas,
+  segmentosActivos,
+  mapaValores,
   hover,
   setHover,
 }: {
   productos: string[];
   mesesDelAnio: string[];
-  celdas: Celda[];
-  hover: Celda | null;
-  setHover: (c: Celda | null) => void;
+  segmentosActivos: string[];
+  mapaValores: Map<string, { ingresos: number; cantidad: number }>;
+  hover: CeldaGrid | null;
+  setHover: (c: CeldaGrid | null) => void;
 }) {
-  const maxIngresos = Math.max(1, ...celdas.map((c) => c.ingresos));
+  const nx = productos.length;
+  const ny = mesesDelAnio.length;
+  const nz = segmentosActivos.length;
 
-  const centroX = ((productos.length - 1) * PRODUCT_SPACING) / 2;
-  const centroZ = ((mesesDelAnio.length - 1) * MONTH_SPACING) / 2;
+  // Pitch independiente por eje: la cantidad de divisiones real no es
+  // igual en los 3 ejes (12 productos x 12 meses x 3 segmentos), pero
+  // escalando cada eje a la misma extension total el bloque resultante
+  // se ve como un cubo en vez de una lamina plana.
+  const pitchX = EXTENSION_OBJETIVO / Math.max(nx - 1, 1);
+  const pitchY = EXTENSION_OBJETIVO / Math.max(ny - 1, 1);
+  const pitchZ = EXTENSION_OBJETIVO / Math.max(nz - 1, 1);
+
+  const offX = ((nx - 1) * pitchX) / 2;
+  const offY = ((ny - 1) * pitchY) / 2;
+  const offZ = ((nz - 1) * pitchZ) / 2;
+
+  const tamanoCelda: [number, number, number] = [
+    pitchX * RELLENO_CELDA,
+    pitchY * RELLENO_CELDA,
+    pitchZ * RELLENO_CELDA,
+  ];
+
+  const celdas: CeldaGrid[] = useMemo(() => {
+    const lista: CeldaGrid[] = [];
+    productos.forEach((producto, xi) => {
+      mesesDelAnio.forEach((mes, yi) => {
+        segmentosActivos.forEach((segmento, zi) => {
+          const valor = mapaValores.get(`${producto}|${mes}|${segmento}`);
+          lista.push({
+            x: xi * pitchX - offX,
+            y: yi * pitchY - offY,
+            z: zi * pitchZ - offZ,
+            producto,
+            mes,
+            segmento,
+            ingresos: valor?.ingresos ?? 0,
+            cantidad: valor?.cantidad ?? 0,
+            vacio: !valor,
+          });
+        });
+      });
+    });
+    return lista;
+  }, [productos, mesesDelAnio, segmentosActivos, mapaValores, offX, offY, offZ, pitchX, pitchY, pitchZ]);
+
+  const maxIngresos = Math.max(1, ...celdas.map((c) => c.ingresos));
 
   return (
     <>
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[10, 15, 10]} intensity={0.8} />
+      <ambientLight intensity={0.85} />
+      <directionalLight position={[10, 15, 10]} intensity={0.7} />
+      <directionalLight position={[-10, -5, -10]} intensity={0.25} />
 
-      {/* Piso de referencia */}
-      <gridHelper args={[Math.max(productos.length, mesesDelAnio.length) * 1.8, 20, "#ccc", "#e5e5e5"]}
-        position={[centroX, 0, centroZ]} />
-
-      {/* Etiquetas de producto (eje X) */}
-      {productos.map((p, i) => (
-        <Text key={p} position={[i * PRODUCT_SPACING - centroX, -0.35, -1 - centroZ]}
-          fontSize={0.22} color="#666" anchorX="center" anchorY="middle" rotation={[-Math.PI / 2.5, 0, 0]}>
-          {siglaProducto(productos, p)}
+      {/* Ticks numerados eje Producto (X) */}
+      {productos.map((_, i) => (
+        <Text key={`px-${i}`} position={[i * pitchX - offX, -offY - 0.7, -offZ - 0.7]}
+          fontSize={0.24} color="#1D9E75" anchorX="center" anchorY="middle">
+          {dosDigitos(i + 1)}
         </Text>
       ))}
 
-      {/* Etiquetas de mes (eje Z) */}
+      {/* Ticks numerados eje Segmento (Z) */}
+      {segmentosActivos.map((_, i) => (
+        <Text key={`sz-${i}`} position={[-offX - 0.7, -offY - 0.7, i * pitchZ - offZ]}
+          fontSize={0.24} color="#534AB7" anchorX="center" anchorY="middle">
+          {dosDigitos(i + 1)}
+        </Text>
+      ))}
+
+      {/* Ticks de mes eje Tiempo (Y) */}
       {mesesDelAnio.map((m, i) => (
-        <Text key={m} position={[-1 - centroX, -0.35, i * MONTH_SPACING - centroZ]}
-          fontSize={0.22} color="#666" anchorX="center" anchorY="middle" rotation={[-Math.PI / 2.5, 0, 0]}>
+        <Text key={`ym-${i}`} position={[-offX - 0.7, i * pitchY - offY, -offZ - 0.7]}
+          fontSize={0.22} color="#2F6FED" anchorX="right" anchorY="middle">
           {NOMBRES_MESES[Number(m.split("-")[1]) - 1]}
         </Text>
       ))}
 
-      {celdas.map((c) => {
-        const productoIdx = productos.indexOf(c.producto);
-        const mesIdx = mesesDelAnio.indexOf(c.mes);
-        if (productoIdx === -1 || mesIdx === -1) return null;
+      {celdas.map((c) => (
+        <Cubelet
+          key={`${c.producto}-${c.mes}-${c.segmento}`}
+          celda={c}
+          tamano={tamanoCelda}
+          intensidad={c.ingresos / maxIngresos}
+          hover={hover}
+          setHover={setHover}
+        />
+      ))}
 
-        const segmentos = Object.keys(COLOR_SEGMENTO);
-        const segIdx = segmentos.indexOf(c.segmento);
-        const x = productoIdx * PRODUCT_SPACING - centroX + (segIdx - 1) * SEGMENT_GAP;
-        const z = mesIdx * MONTH_SPACING - centroZ;
-        const altura = (c.ingresos / maxIngresos) * MAX_ALTURA;
-
-        return (
-          <Barra key={`${c.producto}-${c.mes}-${c.segmento}`} x={x} z={z} altura={altura}
-            color={COLOR_SEGMENTO[c.segmento]} celda={c} hover={hover} setHover={setHover} />
-        );
-      })}
-
-      <OrbitControls enableDamping dampingFactor={0.1} minDistance={5} maxDistance={40} />
+      <OrbitControls enableDamping dampingFactor={0.1} minDistance={4} maxDistance={40} />
     </>
+  );
+}
+
+function PillEje({ color, icono, texto, style }: { color: string; icono: string; texto: string; style: React.CSSProperties }) {
+  return (
+    <div style={{ position: "absolute", display: "flex", alignItems: "center", gap: 8, ...style }}>
+      <div style={{ width: 34, height: 34, borderRadius: "50%", background: color, color: "#fff",
+        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
+        boxShadow: "0 4px 10px rgba(0,0,0,0.15)", flexShrink: 0 }}>
+        {icono}
+      </div>
+      <span style={{ background: color, color: "#fff", fontSize: 12, fontWeight: 500,
+        padding: "6px 14px", borderRadius: 999, boxShadow: "0 4px 10px rgba(0,0,0,0.15)", whiteSpace: "nowrap" }}>
+        {texto}
+      </span>
+    </div>
   );
 }
 
@@ -170,7 +242,7 @@ export default function OlapCube() {
     ocasional: true,
     en_riesgo: true,
   });
-  const [hover, setHover] = useState<Celda | null>(null);
+  const [hover, setHover] = useState<CeldaGrid | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -198,12 +270,20 @@ export default function OlapCube() {
     return datos.meses.filter((m) => m.startsWith(anioSeleccionado));
   }, [datos, anioSeleccionado]);
 
-  const celdasFiltradas = useMemo(() => {
-    if (!datos || !anioSeleccionado) return [];
-    return datos.celdas.filter(
-      (c) => c.mes.startsWith(anioSeleccionado) && segmentosVisibles[c.segmento]
-    );
-  }, [datos, anioSeleccionado, segmentosVisibles]);
+  const segmentosActivos = useMemo(() => {
+    if (!datos) return [];
+    return datos.segmentos.filter((s) => segmentosVisibles[s]);
+  }, [datos, segmentosVisibles]);
+
+  const mapaValores = useMemo(() => {
+    const mapa = new Map<string, { ingresos: number; cantidad: number }>();
+    if (!datos || !anioSeleccionado) return mapa;
+    for (const c of datos.celdas) {
+      if (!c.mes.startsWith(anioSeleccionado)) continue;
+      mapa.set(`${c.producto}|${c.mes}|${c.segmento}`, { ingresos: c.ingresos, cantidad: c.cantidad });
+    }
+    return mapa;
+  }, [datos, anioSeleccionado]);
 
   const toggleSegmento = (seg: string) => {
     setSegmentosVisibles((prev) => ({ ...prev, [seg]: !prev[seg] }));
@@ -219,7 +299,7 @@ export default function OlapCube() {
           <div>
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Cubo OLAP 3D</h1>
             <p style={{ margin: 0, fontSize: 13, color: "#888" }}>
-              Ingresos por Producto × Mes × Segmento RFM — arrastra para rotar, scroll para zoom
+              Ingresos por Producto × Tiempo × Segmento RFM — arrastra para rotar, scroll para zoom
             </p>
           </div>
 
@@ -252,28 +332,38 @@ export default function OlapCube() {
                 ))}
               </div>
 
-              <div style={{ background: "#fff", border: "0.5px solid #e0e0e0", borderRadius: 12,
-                height: 560, overflow: "hidden" }}>
+              <div style={{ position: "relative", background: "#fff", border: "0.5px solid #e0e0e0", borderRadius: 12,
+                height: 580, overflow: "hidden" }}>
                 {loading ? (
                   <p style={{ padding: 16, fontSize: 13, color: "#888" }}>Cargando cubo OLAP...</p>
                 ) : datos && anioSeleccionado ? (
-                  <Canvas camera={{ position: [14, 11, 16], fov: 45 }}>
-                    <color attach="background" args={["#fafafa"]} />
-                    <Escena
-                      productos={datos.productos}
-                      mesesDelAnio={mesesDelAnio}
-                      celdas={celdasFiltradas}
-                      hover={hover}
-                      setHover={setHover}
-                    />
-                  </Canvas>
+                  <>
+                    <Canvas camera={{ position: [7, 6.5, 8], fov: 45 }}>
+                      <color attach="background" args={["#fafafa"]} />
+                      <Escena
+                        productos={datos.productos}
+                        mesesDelAnio={mesesDelAnio}
+                        segmentosActivos={segmentosActivos}
+                        mapaValores={mapaValores}
+                        hover={hover}
+                        setHover={setHover}
+                      />
+                    </Canvas>
+
+                    <PillEje color="#2F6FED" icono="🕐" texto={`Tiempo (${anioSeleccionado})`}
+                      style={{ top: 18, left: 18 }} />
+                    <PillEje color="#1D9E75" icono="📦" texto={`Producto (01-${dosDigitos(datos.productos.length)})`}
+                      style={{ bottom: 18, left: 18 }} />
+                    <PillEje color="#534AB7" icono="👥" texto="Segmento RFM"
+                      style={{ bottom: 18, right: 18, flexDirection: "row-reverse" }} />
+                  </>
                 ) : null}
               </div>
 
               {datos && (
                 <p style={{ margin: 0, fontSize: 12, color: "#aaa" }}>
-                  Eje X: producto (sigla, ver lista abajo) · Eje Z: mes de {anioSeleccionado} · Altura: ingresos ·
-                  Color: segmento RFM. {datos.productos.map((p, i) => `P${i + 1}=${p}`).join(" · ")}
+                  Cada celda es un cubo del OLAP; las apagadas no tuvieron ventas. Intensidad de color = ingresos.{" "}
+                  {datos.productos.map((p, i) => `${dosDigitos(i + 1)}=${p}`).join(" · ")}
                 </p>
               )}
             </>

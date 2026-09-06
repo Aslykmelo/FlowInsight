@@ -9,6 +9,7 @@ import Reports from "./pages/Reports";
 import Users from "./pages/Users";
 import Promotions from "./pages/Promotions";
 import SalesMap from "./pages/SalesMap";
+import OlapCube from "./pages/OlapCube";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/users" element={<Users />} />
           <Route path="/promotions" element={<Promotions />} />
           <Route path="/sales-map" element={<SalesMap />} />
+          <Route path="/olap-cube" element={<OlapCube />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -37,6 +37,7 @@ class Cliente(Base):
     correo = Column(String(150))
     direccion = Column(String(255))
     ciudad = Column(String(100), nullable=True)
+    localidad = Column(String(50), nullable=True)
     fecha_registro = Column(DateTime, default=datetime.utcnow)
     autorizacion_datos = Column(Boolean, default=False)
 

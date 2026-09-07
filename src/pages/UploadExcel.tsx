@@ -22,6 +22,13 @@ interface CampoSistema {
 
 const API_URL = "http://127.0.0.1:8000";
 
+// Oculta visualmente pero deja perceptible para lectores de pantalla
+// y alcanzable con Tab (a diferencia de display:none).
+const srOnly: React.CSSProperties = {
+  position: "absolute", width: 1, height: 1, padding: 0, margin: -1,
+  overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0,
+};
+
 // Campos que el backend espera recibir mapeados
 const CAMPOS_SISTEMA: CampoSistema[] = [
   { key: "cliente_nombre",  label: "Nombre del cliente" },
@@ -166,7 +173,8 @@ export default function UploadExcel() {
 
           {/* Drop zone */}
           {(state.status === "idle" || state.status === "dragging") && (
-            <div
+            <label
+              htmlFor="file-input"
               onDragOver={(e) => { e.preventDefault(); setState((p) => ({ ...p, status:"dragging" })); }}
               onDragLeave={() => setState((p) => ({ ...p, status:"idle" }))}
               onDrop={handleDrop}
@@ -178,9 +186,8 @@ export default function UploadExcel() {
                 background: state.status === "dragging" ? "#EEEDFE" : "#fff",
                 transition:"all 0.2s", cursor:"pointer",
               }}
-              onClick={() => document.getElementById("file-input")?.click()}
             >
-              <span style={{ fontSize:48 }}>📂</span>
+              <span aria-hidden="true" style={{ fontSize:48 }}>📂</span>
               <p style={{ margin:0, fontSize:16, fontWeight:500, color:"#333" }}>
                 Arrastra tu archivo aquí
               </p>
@@ -191,9 +198,14 @@ export default function UploadExcel() {
                 background:"#f5f5f7", padding:"4px 12px", borderRadius:20 }}>
                 .xlsx / .xls — máx. 10 MB
               </span>
-              <input id="file-input" type="file" accept=".xlsx,.xls"
-                style={{ display:"none" }} onChange={handleInput} />
-            </div>
+              <input
+                id="file-input"
+                type="file"
+                accept=".xlsx,.xls"
+                style={srOnly}
+                onChange={handleInput}
+              />
+            </label>
           )}
 
           {/* Configurar columnas */}
@@ -202,15 +214,20 @@ export default function UploadExcel() {
               border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1.5rem" }}>
               <p style={{ margin:"0 0 4px", fontSize:15, fontWeight:500 }}>Configurar columnas</p>
               <p style={{ margin:"0 0 16px", fontSize:13, color:"#888" }}>
-                📄 {state.file.name} — asocia cada campo con la columna correspondiente del archivo
+                <span aria-hidden="true">📄</span> {state.file.name} — asocia cada campo con la columna correspondiente del archivo
               </p>
 
               {CAMPOS_SISTEMA.map((campo) => (
                 <div key={campo.key} style={{ display:"flex", alignItems:"center", gap:12,
                   padding:"8px 0", borderBottom:"0.5px solid #f0f0f0" }}>
-                  <span style={{ flex:1, fontSize:13, color:"#333", fontWeight:500 }}>{campo.label}</span>
+                  <label htmlFor={`campo-${campo.key}`} style={{ flex:1, fontSize:13, color:"#333", fontWeight:500 }}>
+                    {campo.label}
+                  </label>
                   <select
+                    id={`campo-${campo.key}`}
                     value={mapeo[campo.key] ?? ""}
+                    aria-describedby={mapeoError ? "mapeo-error" : undefined}
+                    aria-invalid={Boolean(mapeoError && !mapeo[campo.key])}
                     onChange={(e) => setMapeo((prev) => ({ ...prev, [campo.key]: e.target.value }))}
                     style={{ flex:1, border:"0.5px solid #e0e0e0", borderRadius:8, padding:"7px 10px",
                       fontSize:13, outline:"none", background:"#fff", boxSizing:"border-box" }}
@@ -224,9 +241,10 @@ export default function UploadExcel() {
               ))}
 
               {mapeoError && (
-                <div style={{ background:"#FAECE7", border:"0.5px solid #E24B4A", borderRadius:8,
+                <div id="mapeo-error" role="alert" aria-live="assertive"
+                  style={{ background:"#FAECE7", border:"0.5px solid #E24B4A", borderRadius:8,
                   padding:"10px 14px", fontSize:13, color:"#993C1D", marginTop:14 }}>
-                  ⚠️ {mapeoError}
+                  <span aria-hidden="true">⚠️</span> {mapeoError}
                 </div>
               )}
 
@@ -251,7 +269,7 @@ export default function UploadExcel() {
               {state.progress < 100 ? (
                 <>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                    <span style={{ fontSize:14, color:"#555" }}>📄 {state.file?.name}</span>
+                    <span style={{ fontSize:14, color:"#555" }}><span aria-hidden="true">📄</span> {state.file?.name}</span>
                     <span style={{ fontSize:14, fontWeight:500, color:"#534AB7" }}>{state.progress}%</span>
                   </div>
                   <div style={{ background:"#f0f0f0", borderRadius:99, height:8 }}>
@@ -267,10 +285,10 @@ export default function UploadExcel() {
 
           {/* Éxito */}
           {state.status === "success" && (
-            <div style={{ width:"100%", maxWidth:560, background:"#fff",
+            <div role="status" aria-live="polite" style={{ width:"100%", maxWidth:560, background:"#fff",
               border:"0.5px solid #e0e0e0", borderRadius:12, padding:"2rem",
               display:"flex", flexDirection:"column", alignItems:"center", gap:16 }}>
-              <span style={{ fontSize:52 }}>✅</span>
+              <span aria-hidden="true" style={{ fontSize:52 }}>✅</span>
               <p style={{ margin:0, fontSize:17, fontWeight:500, color:"#0F6E56" }}>
                 ¡Archivo cargado exitosamente!
               </p>

@@ -232,7 +232,7 @@ function Escena({
 function PillEje({ color, icono, texto, style }: { color: string; icono: string; texto: string; style: React.CSSProperties }) {
   return (
     <div style={{ position: "absolute", display: "flex", alignItems: "center", gap: 8, ...style }}>
-      <div style={{ width: 34, height: 34, borderRadius: "50%", background: color, color: "#fff",
+      <div aria-hidden="true" style={{ width: 34, height: 34, borderRadius: "50%", background: color, color: "#fff",
         display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
         boxShadow: "0 4px 10px rgba(0,0,0,0.15)", flexShrink: 0 }}>
         {icono}

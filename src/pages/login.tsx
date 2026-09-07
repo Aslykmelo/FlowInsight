@@ -137,6 +137,7 @@ export default function Login() {
           }}
         >
           <p
+            aria-hidden="true"
             style={{
               margin: "0 0 16px",
               fontSize: 52,
@@ -203,6 +204,7 @@ export default function Login() {
                 }}
               >
                 <span
+                  aria-hidden="true"
                   style={{
                     fontSize: 22,
                     flexShrink: 0,
@@ -288,6 +290,7 @@ export default function Login() {
             }}
           >
             <label
+              htmlFor="login-email"
               style={{
                 display: "block",
                 fontSize: 13,
@@ -300,9 +303,12 @@ export default function Login() {
             </label>
 
             <input
+              id="login-email"
               type="email"
               placeholder="asly@flowinsight.com"
               value={email}
+              aria-invalid={Boolean(error && !email)}
+              aria-describedby={error ? "login-error" : undefined}
               onChange={(e) => {
                 setEmail(e.target.value);
                 setError("");
@@ -335,6 +341,7 @@ export default function Login() {
             }}
           >
             <label
+              htmlFor="login-password"
               style={{
                 display: "block",
                 fontSize: 13,
@@ -352,9 +359,12 @@ export default function Login() {
               }}
             >
               <input
+                id="login-password"
                 type={showPass ? "text" : "password"}
                 placeholder="••••••••"
                 value={password}
+                aria-invalid={Boolean(error && !password)}
+                aria-describedby={error ? "login-error" : undefined}
                 onChange={(e) => {
                   setPassword(e.target.value);
                   setError("");
@@ -380,6 +390,8 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => setShowPass(!showPass)}
+                aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
+                aria-pressed={showPass}
                 style={{
                   position: "absolute",
                   right: 12,
@@ -393,7 +405,7 @@ export default function Login() {
                   padding: 0,
                 }}
               >
-                {showPass ? "🙈" : "👁️"}
+                <span aria-hidden="true">{showPass ? "🙈" : "👁️"}</span>
               </button>
             </div>
           </div>
@@ -403,6 +415,9 @@ export default function Login() {
           ========================== */}
           {error && (
             <div
+              id="login-error"
+              role="alert"
+              aria-live="assertive"
               style={{
                 background: "#FAECE7",
                 border: "0.5px solid #E24B4A",
@@ -413,7 +428,7 @@ export default function Login() {
                 marginBottom: 16,
               }}
             >
-              ⚠️ {error}
+              <span aria-hidden="true">⚠️</span> {error}
             </div>
           )}
 
@@ -424,9 +439,10 @@ export default function Login() {
             type="button"
             onClick={handleLogin}
             disabled={loading}
+            aria-busy={loading}
             style={{
               width: "100%",
-              background: loading ? "#aaa" : "#534AB7",
+              background: loading ? "#767676" : "#534AB7",
               color: "#fff",
               border: "none",
               borderRadius: 8,

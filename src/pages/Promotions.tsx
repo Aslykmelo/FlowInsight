@@ -135,6 +135,16 @@ export default function Promotions() {
                       <tr
                         key={c.id_cliente}
                         onClick={() => seleccionarCliente(c.id_cliente)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            seleccionarCliente(c.id_cliente);
+                          }
+                        }}
+                        tabIndex={0}
+                        role="button"
+                        aria-pressed={seleccionado === c.id_cliente}
+                        aria-label={`Generar mensaje de promoción para ${c.nombre_cliente}`}
                         style={{
                           borderBottom: "0.5px solid #f0f0f0", cursor: "pointer",
                           background: seleccionado === c.id_cliente ? "#EFEDFA" : i % 2 === 0 ? "#fff" : "#fafafa",

@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
+import EmptyState from "../components/EmptyState";
 
 // ─── Types ────────────────────────────────────────────
 interface Client {
@@ -53,27 +55,40 @@ function fechaComparable(iso: string): string {
 // ─── Modal detalle cliente ────────────────────────────
 function ClientModal({ client, onClose }: { client: Client; onClose: () => void }) {
   const s = ESTADO_STYLE[client.estado];
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.4)",
       display:"flex", alignItems:"center", justifyContent:"center", zIndex:100 }}
       onClick={onClose}>
-      <div style={{ background:"#fff", borderRadius:16, padding:"2rem",
+      <div role="dialog" aria-modal="true" aria-labelledby="client-modal-title"
+        style={{ background:"#fff", borderRadius:16, padding:"2rem",
         width:460, boxShadow:"0 8px 32px rgba(0,0,0,0.12)" }}
         onClick={e => e.stopPropagation()}>
 
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"1.5rem" }}>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ width:46, height:46, borderRadius:"50%", background:"#EEEDFE",
+            <div aria-hidden="true" style={{ width:46, height:46, borderRadius:"50%", background:"#EEEDFE",
               display:"flex", alignItems:"center", justifyContent:"center",
               fontSize:18, fontWeight:500, color:"#534AB7", flexShrink:0 }}>
               {client.nombre.charAt(0)}
             </div>
             <div>
-              <p style={{ margin:0, fontSize:16, fontWeight:500 }}>{client.nombre}</p>
+              <p id="client-modal-title" style={{ margin:0, fontSize:16, fontWeight:500 }}>{client.nombre}</p>
               <p style={{ margin:0, fontSize:12, color:"#888" }}>ID {client.id}</p>
             </div>
           </div>
-          <button onClick={onClose} style={{ background:"transparent", border:"none",
+          <button ref={closeButtonRef} onClick={onClose} aria-label="Cerrar detalle de cliente"
+            style={{ background:"transparent", border:"none",
             cursor:"pointer", fontSize:22, color:"#aaa", lineHeight:1 }}>×</button>
         </div>
 
@@ -113,6 +128,7 @@ function ClientModal({ client, onClose }: { client: Client; onClose: () => void 
 
 // ─── Clients Page ─────────────────────────────────────
 export default function Clients() {
+  const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -287,16 +303,22 @@ export default function Clients() {
               { key:"activo",    label:"Activos",      count: conteo.activo,   color:"#0F6E56", bg:"#E1F5EE" },
               { key:"en riesgo", label:"En riesgo",    count: conteo.enRiesgo, color:"#BA7517", bg:"#FAEEDA" },
               { key:"inactivo",  label:"Inactivos",    count: conteo.inactivo, color:"#993C1D", bg:"#FAECE7" },
-            ].map(item => (
-              <div key={item.key}
-                onClick={() => setFiltro(filtro === item.key as typeof filtro ? "todos" : item.key as typeof filtro)}
-                style={{ background:"#fff", border: filtro === item.key ? `1.5px solid ${item.color}`:"0.5px solid #e0e0e0",
-                  borderRadius:12, padding:"1rem 1.25rem", cursor:"pointer" }}>
-                <p style={{ margin:"0 0 4px", fontSize:12, color:"#888" }}>{item.label}</p>
-                <p style={{ margin:0, fontSize:26, fontWeight:500, color:item.color }}>{item.count}</p>
-                <p style={{ margin:"4px 0 0", fontSize:12, color:"#aaa" }}>clientes</p>
-              </div>
-            ))}
+            ].map(item => {
+              const activo = filtro === item.key;
+              return (
+                <button key={item.key} type="button"
+                  onClick={() => setFiltro(activo ? "todos" : item.key as typeof filtro)}
+                  aria-pressed={activo}
+                  aria-label={`Filtrar por estado ${item.label}, ${item.count} clientes`}
+                  style={{ background:"#fff", border: activo ? `1.5px solid ${item.color}`:"0.5px solid #e0e0e0",
+                    borderRadius:12, padding:"1rem 1.25rem", cursor:"pointer",
+                    textAlign:"left", font:"inherit" }}>
+                  <p style={{ margin:"0 0 4px", fontSize:12, color:"#888" }}>{item.label}</p>
+                  <p style={{ margin:0, fontSize:26, fontWeight:500, color:item.color }}>{item.count}</p>
+                  <p style={{ margin:"4px 0 0", fontSize:12, color:"#aaa" }}>clientes</p>
+                </button>
+              );
+            })}
           </div>
 
           {/* Búsqueda y filtros */}
@@ -373,6 +395,17 @@ export default function Clients() {
           </div>
 
           {/* Tabla */}
+          {clients.length === 0 ? (
+            <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12 }}>
+              <EmptyState
+                icon="👥"
+                title="Todavía no hay clientes registrados"
+                description="Los clientes aparecen aquí automáticamente cuando cargas un archivo de ventas en Excel."
+                actionLabel="Ir a Cargar Excel"
+                onAction={() => navigate("/upload")}
+              />
+            </div>
+          ) : (
           <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, overflow:"hidden" }}>
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
               <thead>
@@ -385,8 +418,14 @@ export default function Clients() {
               </thead>
               <tbody>
                 {datos.length === 0 ? (
-                  <tr><td colSpan={8} style={{ padding:"2rem", textAlign:"center", color:"#aaa" }}>
-                    No se encontraron clientes
+                  <tr><td colSpan={8}>
+                    <EmptyState
+                      icon="🔍"
+                      title="Sin resultados con estos filtros"
+                      description="Ningún cliente coincide con la búsqueda o los filtros aplicados."
+                      actionLabel={hayFiltrosActivos ? "Limpiar filtros" : undefined}
+                      onAction={hayFiltrosActivos ? limpiarFiltros : undefined}
+                    />
                   </td></tr>
                 ) : datos.map((c, i) => {
                   const s = ESTADO_STYLE[c.estado];
@@ -395,7 +434,7 @@ export default function Clients() {
                       background: i % 2 === 0 ? "#fff":"#fafafa" }}>
                       <td style={{ padding:"12px 16px" }}>
                         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                          <div style={{ width:32, height:32, borderRadius:"50%", background:"#EEEDFE",
+                          <div aria-hidden="true" style={{ width:32, height:32, borderRadius:"50%", background:"#EEEDFE",
                             display:"flex", alignItems:"center", justifyContent:"center",
                             fontSize:12, fontWeight:500, color:"#534AB7", flexShrink:0 }}>
                             {c.nombre.charAt(0)}
@@ -428,6 +467,7 @@ export default function Clients() {
               </tbody>
             </table>
           </div>
+          )}
 
           <p style={{ margin:0, fontSize:12, color:"#aaa" }}>
             Mostrando {datos.length} de {clients.length} clientes

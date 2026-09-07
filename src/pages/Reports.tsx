@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Sidebar from "../components/Sidebar";
+import EmptyState from "../components/EmptyState";
 
 // ─── Types ────────────────────────────────────────────
 interface Report {
@@ -62,6 +63,8 @@ function TipoDropdown({
   return createPortal(
     <div
       data-format-dropdown
+      role="menu"
+      aria-label="Tipos de reporte"
       style={{
         position: "fixed",
         top: rect.bottom + 6,
@@ -78,6 +81,7 @@ function TipoDropdown({
       {TIPOS.map((t, idx) => (
         <button
           key={t.value}
+          role="menuitem"
           onClick={() => onSelect(t)}
           style={{
             display: "block",
@@ -106,6 +110,8 @@ function TipoDropdown({
 function Toast({ message }: { message: string }) {
   return (
     <div
+      role="status"
+      aria-live="polite"
       style={{
         position: "fixed",
         bottom: 24,
@@ -128,7 +134,7 @@ function Toast({ message }: { message: string }) {
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
-      <span style={{ fontSize: 16 }}>⬇️</span>
+      <span aria-hidden="true" style={{ fontSize: 16 }}>⬇️</span>
       <span style={{ fontSize: 13, color: "#0F6E56", fontWeight: 500 }}>{message}</span>
     </div>
   );
@@ -151,6 +157,7 @@ export default function Reports() {
   const [openDropdown, setOpenDropdown] = useState<DropdownState | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const headerButtonRef = useRef<HTMLButtonElement>(null);
 
   // ───────────────────────────────────────────
   // CARGAR REPORTES DEL BACKEND
@@ -198,7 +205,7 @@ export default function Reports() {
     cargarReportes();
   }, []);
 
-  // Cerrar el dropdown al hacer click fuera
+  // Cerrar el dropdown al hacer click fuera, o con Escape desde el teclado
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       const target = e.target as HTMLElement;
@@ -206,8 +213,15 @@ export default function Reports() {
         setOpenDropdown(null);
       }
     }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpenDropdown(null);
+    }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   useEffect(() => {
@@ -228,6 +242,12 @@ export default function Reports() {
       return;
     }
     setOpenDropdown({ id, rect: e.currentTarget.getBoundingClientRect() });
+  };
+
+  // Permite abrir el mismo dropdown del header desde el botón del Empty State
+  const abrirDropdownHeader = () => {
+    const rect = headerButtonRef.current?.getBoundingClientRect();
+    if (rect) setOpenDropdown({ id: "header", rect });
   };
 
   // ───────────────────────────────────────────
@@ -390,6 +410,7 @@ export default function Reports() {
           </div>
 
           <button
+            ref={headerButtonRef}
             data-format-trigger
             onClick={(e) => toggleDropdown("header", e)}
             disabled={generando}
@@ -406,16 +427,22 @@ export default function Reports() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#f9f9f9", borderBottom: "0.5px solid #e0e0e0" }}>
-                  {["Reporte", "Tipo", "Fecha de generación", "Estado", "", ""].map((h) => (
-                    <th key={h} style={{ padding: "10px 16px", textAlign: "left",
+                  {["Reporte", "Tipo", "Fecha de generación", "Estado", "", ""].map((h, i) => (
+                    <th key={`${h}-${i}`} style={{ padding: "10px 16px", textAlign: "left",
                       fontWeight: 500, color: "#666", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {reports.length === 0 ? (
-                  <tr><td colSpan={6} style={{ padding: "2rem", textAlign: "center", color: "#aaa" }}>
-                    No hay reportes generados todavía
+                  <tr><td colSpan={6}>
+                    <EmptyState
+                      icon="📄"
+                      title="Todavía no has generado ningún reporte"
+                      description="Genera tu primer reporte de ventas, clientes o riesgo de abandono."
+                      actionLabel="Generar reporte"
+                      onAction={abrirDropdownHeader}
+                    />
                   </td></tr>
                 ) : reports.map((r, i) => {
                   const s = ESTADO_STYLE[r.estado];

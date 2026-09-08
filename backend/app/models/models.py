@@ -77,6 +77,8 @@ class DetallePedido(Base):
     cantidad = Column(Integer, nullable=False)
     precio_unitario = Column(Numeric(10, 2), nullable=False)
     subtotal = Column(Numeric(12, 2), nullable=False)
+    origen_hash = Column(String(64), nullable=True, index=True)
+
 
     pedido = relationship("Pedido", back_populates="detalles")
 

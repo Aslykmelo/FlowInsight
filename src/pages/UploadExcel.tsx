@@ -105,12 +105,13 @@ export default function UploadExcel() {
 
       const data = response.data;
       const resumen =
-        `Filas procesadas: ${data.filas_procesadas} · ` +
-        `Clientes nuevos: ${data.clientes_creados} · ` +
-        `Productos nuevos: ${data.productos_creados} · ` +
-        `Pedidos creados: ${data.pedidos_creados}` +
-        (data.filas_con_error > 0 ? ` · Filas con error: ${data.filas_con_error}` : "");
-
+            `Filas procesadas: ${data.filas_procesadas} · ` +
+            `Clientes nuevos: ${data.clientes_creados} · ` +
+            `Productos nuevos: ${data.productos_creados} · ` +
+            `Pedidos creados: ${data.pedidos_creados}` +
+            (data.filas_con_error > 0 ? ` · Filas con error: ${data.filas_con_error}` : "") +
+            (data.filas_duplicadas > 0 ? ` · Duplicadas (omitidas): ${data.filas_duplicadas}` : "");
+            
       setState({ status: "success", file, progress: 100, message: resumen });
     } catch (err) {
       const axiosError = err as AxiosError<{ detail?: string }>;

@@ -53,9 +53,12 @@ export default function UploadExcel() {
   const [state, setState] = useState<UploadState>({ status: "idle", file: null, progress: 0 });
   const [mapeo, setMapeo] = useState<Record<string, string>>({});
   const [mapeoError, setMapeoError] = useState("");
+  const [autorizado, setAutorizado] = useState(false);
   const navigate = useNavigate();
 
   const handleFile = useCallback((file: File) => {
+    if (!autorizado) return; // sin autorización confirmada, no se procesa ningún archivo
+
     if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
       setState({ status: "error", file: null, progress: 0, message: "Solo se aceptan archivos .xlsx o .xls" });
       return;
@@ -63,13 +66,14 @@ export default function UploadExcel() {
     setMapeo({});
     setMapeoError("");
     setState({ status: "configurando", file, progress: 0 });
-  }, []);
+  }, [autorizado]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    if (!autorizado) return;
     const file = e.dataTransfer.files[0];
     if (file) handleFile(file);
-  }, [handleFile]);
+  }, [handleFile, autorizado]);
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -172,11 +176,30 @@ export default function UploadExcel() {
         <main style={{ padding:"2rem", display:"flex", flexDirection:"column",
           alignItems:"center", gap:"1.5rem" }}>
 
+          {/* Confirmación de autorización de datos */}
+          {!enConfiguracionOSubida && state.status !== "success" && (
+            <div style={{ width:"100%", maxWidth:560, background:"#FAEEDA",
+              border:"0.5px solid #EF9F27", borderRadius:12, padding:"1rem 1.25rem",
+              display:"flex", alignItems:"flex-start", gap:12 }}>
+              <input
+                type="checkbox"
+                id="autorizacion"
+                checked={autorizado}
+                onChange={(e) => setAutorizado(e.target.checked)}
+                style={{ marginTop:3, width:16, height:16, cursor:"pointer", flexShrink:0 }}
+              />
+              <label htmlFor="autorizacion" style={{ fontSize:13, color:"#7A4A0A", cursor:"pointer", lineHeight:1.5 }}>
+                Confirmo que cuento con la <strong>autorización expresa</strong> de los clientes incluidos
+                en este archivo para el tratamiento de sus datos personales, conforme a la Ley 1581 de 2012.
+              </label>
+            </div>
+          )}
+
           {/* Drop zone */}
           {(state.status === "idle" || state.status === "dragging") && (
             <label
               htmlFor="file-input"
-              onDragOver={(e) => { e.preventDefault(); setState((p) => ({ ...p, status:"dragging" })); }}
+              onDragOver={(e) => { e.preventDefault(); if (autorizado) setState((p) => ({ ...p, status:"dragging" })); }}
               onDragLeave={() => setState((p) => ({ ...p, status:"idle" }))}
               onDrop={handleDrop}
               style={{
@@ -184,13 +207,14 @@ export default function UploadExcel() {
                 border: state.status === "dragging" ? "2px dashed #534AB7" : "2px dashed #ccc",
                 borderRadius:16, padding:"3rem 2rem",
                 display:"flex", flexDirection:"column", alignItems:"center", gap:16,
-                background: state.status === "dragging" ? "#EEEDFE" : "#fff",
-                transition:"all 0.2s", cursor:"pointer",
+                background: state.status === "dragging" ? "#EEEDFE" : autorizado ? "#fff" : "#f5f5f7",
+                opacity: autorizado ? 1 : 0.6,
+                transition:"all 0.2s", cursor: autorizado ? "pointer" : "not-allowed",
               }}
             >
               <span aria-hidden="true" style={{ fontSize:48 }}>📂</span>
               <p style={{ margin:0, fontSize:16, fontWeight:500, color:"#333" }}>
-                Arrastra tu archivo aquí
+                {autorizado ? "Arrastra tu archivo aquí" : "Marca la casilla de autorización para continuar"}
               </p>
               <p style={{ margin:0, fontSize:13, color:"#888" }}>
                 o haz clic para seleccionarlo
@@ -203,6 +227,7 @@ export default function UploadExcel() {
                 id="file-input"
                 type="file"
                 accept=".xlsx,.xls"
+                disabled={!autorizado}
                 style={srOnly}
                 onChange={handleInput}
               />

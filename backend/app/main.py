@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.db.session import engine
-from app.api import clientes, auth, productos, pedidos, dashboard, upload, reportes, promociones, usuarios, olap
+from app.api import clientes, auth, productos, pedidos, dashboard, upload, reportes, promociones, usuarios, olap, predicciones
 
 app = FastAPI(title="FlowInsight API")
 
@@ -25,6 +25,7 @@ app.include_router(reportes.router)
 app.include_router(promociones.router)
 app.include_router(usuarios.router)
 app.include_router(olap.router)
+app.include_router(predicciones.router)
 
 
 @app.get("/health")

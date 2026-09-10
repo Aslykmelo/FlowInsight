@@ -24,6 +24,10 @@ SEGMENTOS = ["activo", "ocasional", "en_riesgo"]
 # pedidos. Mientras no exista un modelo de IA entrenado, esta es
 # la senal real disponible; el dia que PrediccionCliente tenga
 # datos, se puede sustituir sin cambiar la forma del cubo.
+#
+# IMPORTANTE: se filtra por Cliente.autorizacion_datos == True,
+# para respetar la Ley 1581 de 2012. No quitar este filtro sin
+# agregar uno equivalente.
 # ============================================================
 
 @router.get("/cubo", response_model=CuboOlapOut)
@@ -51,6 +55,8 @@ def cubo_olap(
         .join(DetallePedido, DetallePedido.id_producto == Producto.id_producto)
         .join(Pedido, Pedido.id_pedido == DetallePedido.id_pedido)
         .join(ultima_compra, ultima_compra.c.id_cliente == Pedido.id_cliente)
+        .join(Cliente, Cliente.id_cliente == Pedido.id_cliente)
+        .filter(Cliente.autorizacion_datos == True)
         .all()
     )
 

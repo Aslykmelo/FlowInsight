@@ -17,49 +17,32 @@ interface Prediction {
   ciudad: string;
   ultimaCompra: string;
   diasSinComprar: number;
-  intervalo: number;          // predicción del Random Forest Regressor (días)
+  intervalo: number;
   proximaCompra: string;
-  riesgo: "bajo" | "medio" | "alto"; // predicción del Gradient Boosting Classifier
-  probabilidad: number;       // probabilidad de retención (%)
+  riesgo: "bajo" | "medio" | "alto";
+  probabilidad: number;
   historial: CompraHistorica[];
 }
 
-// ─── Mock data (RF31) — pendiente de endpoint /predicciones ────────
-// Cuando el backend exponga el modelo, este archivo se conecta igual
-// que ya se hizo con Clientes/Reportes/Usuarios: un fetch a la API
-// en lugar de este arreglo, manteniendo la misma forma de los datos.
-const PREDICTIONS: Prediction[] = [
-  { id:"C001", cliente:"Restaurante El Fogón",    ciudad:"Bogotá",   ultimaCompra:"15/04/2026", diasSinComprar:8,  intervalo:12, proximaCompra:"27/04/2026", riesgo:"bajo",  probabilidad:92,
-    historial:[{fecha:"Ene",monto:3800000},{fecha:"Feb",monto:4100000},{fecha:"Mar",monto:3950000},{fecha:"Abr",monto:4320000}] },
-  { id:"C002", cliente:"Cafetería Central",        ciudad:"Bogotá",   ultimaCompra:"02/04/2026", diasSinComprar:21, intervalo:18, proximaCompra:"20/04/2026", riesgo:"alto",  probabilidad:34,
-    historial:[{fecha:"Ene",monto:1400000},{fecha:"Feb",monto:1150000},{fecha:"Mar",monto:1020000},{fecha:"Abr",monto:980000}] },
-  { id:"C003", cliente:"Hotel Dann Carlton",       ciudad:"Bogotá",   ultimaCompra:"20/04/2026", diasSinComprar:3,  intervalo:10, proximaCompra:"30/04/2026", riesgo:"bajo",  probabilidad:88,
-    historial:[{fecha:"Ene",monto:11200000},{fecha:"Feb",monto:11800000},{fecha:"Mar",monto:12100000},{fecha:"Abr",monto:12500000}] },
-  { id:"C004", cliente:"Panadería La Espiga",      ciudad:"Medellín", ultimaCompra:"10/04/2026", diasSinComprar:13, intervalo:14, proximaCompra:"24/04/2026", riesgo:"medio", probabilidad:61,
-    historial:[{fecha:"Ene",monto:2300000},{fecha:"Feb",monto:2150000},{fecha:"Mar",monto:2050000},{fecha:"Abr",monto:2100000}] },
-  { id:"C005", cliente:"Supermercado Éxito Norte", ciudad:"Bogotá",   ultimaCompra:"25/03/2026", diasSinComprar:34, intervalo:30, proximaCompra:"24/04/2026", riesgo:"alto",  probabilidad:28,
-    historial:[{fecha:"Ene",monto:920000},{fecha:"Feb",monto:780000},{fecha:"Mar",monto:610000},{fecha:"Abr",monto:560000}] },
-  { id:"C006", cliente:"Club El Nogal",            ciudad:"Bogotá",   ultimaCompra:"18/04/2026", diasSinComprar:5,  intervalo:7,  proximaCompra:"25/04/2026", riesgo:"bajo",  probabilidad:95,
-    historial:[{fecha:"Ene",monto:16800000},{fecha:"Feb",monto:17400000},{fecha:"Mar",monto:17900000},{fecha:"Abr",monto:18200000}] },
-  { id:"C007", cliente:"Colegio Los Alpes",        ciudad:"Bogotá",   ultimaCompra:"05/04/2026", diasSinComprar:18, intervalo:21, proximaCompra:"26/04/2026", riesgo:"medio", probabilidad:55,
-    historial:[{fecha:"Ene",monto:1600000},{fecha:"Feb",monto:1520000},{fecha:"Mar",monto:1480000},{fecha:"Abr",monto:1450000}] },
-  { id:"C008", cliente:"Clínica Shaio",            ciudad:"Bogotá",   ultimaCompra:"12/04/2026", diasSinComprar:11, intervalo:15, proximaCompra:"27/04/2026", riesgo:"bajo",  probabilidad:81,
-    historial:[{fecha:"Ene",monto:5300000},{fecha:"Feb",monto:5550000},{fecha:"Mar",monto:5680000},{fecha:"Abr",monto:5800000}] },
-  { id:"C009", cliente:"Bar La Candelaria",        ciudad:"Bogotá",   ultimaCompra:"01/03/2026", diasSinComprar:58, intervalo:45, proximaCompra:"15/04/2026", riesgo:"alto",  probabilidad:18,
-    historial:[{fecha:"Ene",monto:480000},{fecha:"Feb",monto:340000},{fecha:"Mar",monto:250000},{fecha:"Abr",monto:210000}] },
-  { id:"C010", cliente:"Jardín Infantil Semillas", ciudad:"Cali",     ultimaCompra:"22/04/2026", diasSinComprar:1,  intervalo:8,  proximaCompra:"30/04/2026", riesgo:"bajo",  probabilidad:90,
-    historial:[{fecha:"Ene",monto:2600000},{fecha:"Feb",monto:2750000},{fecha:"Mar",monto:2820000},{fecha:"Abr",monto:2900000}] },
-  { id:"C011", cliente:"Fonda Paisa Doña Rosa",    ciudad:"Medellín", ultimaCompra:"19/04/2026", diasSinComprar:4,  intervalo:11, proximaCompra:"30/04/2026", riesgo:"bajo",  probabilidad:86,
-    historial:[{fecha:"Ene",monto:5600000},{fecha:"Feb",monto:5850000},{fecha:"Mar",monto:5980000},{fecha:"Abr",monto:6100000}] },
-  { id:"C012", cliente:"Centro Comercial Andino",  ciudad:"Bogotá",   ultimaCompra:"10/02/2026", diasSinComprar:71, intervalo:50, proximaCompra:"01/04/2026", riesgo:"alto",  probabilidad:12,
-    historial:[{fecha:"Ene",monto:210000},{fecha:"Feb",monto:150000},{fecha:"Mar",monto:90000},{fecha:"Abr",monto:80000}] },
-  { id:"C013", cliente:"Panadería El Trigal",      ciudad:"Cali",     ultimaCompra:"28/03/2026", diasSinComprar:29, intervalo:25, proximaCompra:"22/04/2026", riesgo:"alto",  probabilidad:31,
-    historial:[{fecha:"Ene",monto:1100000},{fecha:"Feb",monto:920000},{fecha:"Mar",monto:800000},{fecha:"Abr",monto:750000}] },
-  { id:"C014", cliente:"Droguería San Marcos",     ciudad:"Medellín", ultimaCompra:"30/03/2026", diasSinComprar:27, intervalo:20, proximaCompra:"19/04/2026", riesgo:"alto",  probabilidad:25,
-    historial:[{fecha:"Ene",monto:2000000},{fecha:"Feb",monto:1780000},{fecha:"Mar",monto:1500000},{fecha:"Abr",monto:1300000}] },
-];
+interface ApiPrediccion {
+  id: string;
+  cliente: string;
+  ciudad: string | null;
+  ultima_compra: string | null;
+  dias_sin_comprar: number;
+  intervalo: number;
+  proxima_compra: string | null;
+  riesgo: string;
+  probabilidad: number;
+  historial: { fecha: string; monto: number }[];
+}
+
+const API_URL = "http://127.0.0.1:8000";
 
 // ─── Helpers ──────────────────────────────────────────
+const riesgoValido = (r: string): Prediction["riesgo"] =>
+  r === "alto" ? "alto" : r === "medio" ? "medio" : "bajo";
+
 const RIESGO_STYLE: Record<Prediction["riesgo"], { color: string; bg: string; label: string; emoji: string }> = {
   bajo:  { color: "#0F6E56", bg: "#E1F5EE", label: "Bajo",  emoji: "🟢" },
   medio: { color: "#BA7517", bg: "#FAEEDA", label: "Medio", emoji: "🟡" },
@@ -187,6 +170,10 @@ function DetallePrediccion({ prediction, onClose }: { prediction: Prediction; on
 
 // ─── Predictions Page ─────────────────────────────────
 export default function Predictions() {
+  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
   const [filtro, setFiltro] = useState<"todos" | "bajo" | "medio" | "alto">("todos");
   const [busqueda, setBusqueda] = useState("");
   const [ciudad, setCiudad] = useState("todas");
@@ -198,9 +185,60 @@ export default function Predictions() {
 
   const tablaRef = useRef<HTMLDivElement>(null);
 
-  const CIUDADES = Array.from(new Set(PREDICTIONS.map(p => p.ciudad))).sort();
+  // ───────────────────────────────────────────
+  // CARGAR PREDICCIONES DEL BACKEND
+  // ───────────────────────────────────────────
+  useEffect(() => {
+    const cargarPredicciones = async () => {
+      try {
+        setLoading(true);
+        setError("");
 
-  const datos = PREDICTIONS
+        const token = localStorage.getItem("token");
+        if (!token) {
+          setError("No hay sesión iniciada.");
+          return;
+        }
+
+        const response = await fetch(`${API_URL}/predicciones`, {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Error al obtener predicciones: ${response.status}`);
+        }
+
+        const data: ApiPrediccion[] = await response.json();
+
+        const prediccionesFormateadas: Prediction[] = data.map((p) => ({
+          id: p.id,
+          cliente: p.cliente,
+          ciudad: p.ciudad || "Sin ciudad",
+          ultimaCompra: p.ultima_compra || "—",
+          diasSinComprar: p.dias_sin_comprar,
+          intervalo: p.intervalo,
+          proximaCompra: p.proxima_compra || "—",
+          riesgo: riesgoValido(p.riesgo),
+          probabilidad: p.probabilidad,
+          historial: p.historial,
+        }));
+
+        setPredictions(prediccionesFormateadas);
+      } catch (err) {
+        console.error(err);
+        setError("No fue posible cargar las predicciones.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    cargarPredicciones();
+  }, []);
+
+  const CIUDADES = Array.from(new Set(predictions.map(p => p.ciudad))).sort();
+
+  const datos = predictions
     .filter(p => filtro === "todos" || p.riesgo === filtro)
     .filter(p => ciudad === "todas" || p.ciudad === ciudad)
     .filter(p => intervaloMin === "" || p.intervalo >= Number(intervaloMin))
@@ -211,12 +249,12 @@ export default function Predictions() {
                  p.id.toLowerCase().includes(busqueda.toLowerCase()));
 
   const conteo = {
-    bajo:  PREDICTIONS.filter(p => p.riesgo === "bajo").length,
-    medio: PREDICTIONS.filter(p => p.riesgo === "medio").length,
-    alto:  PREDICTIONS.filter(p => p.riesgo === "alto").length,
+    bajo:  predictions.filter(p => p.riesgo === "bajo").length,
+    medio: predictions.filter(p => p.riesgo === "medio").length,
+    alto:  predictions.filter(p => p.riesgo === "alto").length,
   };
 
-  const clientesAltoRiesgo = PREDICTIONS
+  const clientesAltoRiesgo = predictions
     .filter(p => p.riesgo === "alto")
     .sort((a, b) => a.probabilidad - b.probabilidad);
 
@@ -238,6 +276,40 @@ export default function Predictions() {
     setFiltro("alto");
     tablaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  // ───────────────────────────────────────────
+  // LOADING
+  // ───────────────────────────────────────────
+  if (loading) {
+    return (
+      <div style={{ display:"flex", minHeight:"100vh", background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+        <Sidebar />
+        <div style={{ flex:1, display:"flex", justifyContent:"center", alignItems:"center", fontSize:18, color:"#666" }}>
+          Cargando predicciones...
+        </div>
+      </div>
+    );
+  }
+
+  // ───────────────────────────────────────────
+  // ERROR
+  // ───────────────────────────────────────────
+  if (error) {
+    return (
+      <div style={{ display:"flex", minHeight:"100vh", background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+        <Sidebar />
+        <div style={{ flex:1, display:"flex", justifyContent:"center", alignItems:"center",
+          flexDirection:"column", gap:10 }}>
+          <h2>Error</h2>
+          <p style={{ color:"#777" }}>{error}</p>
+          <button onClick={() => window.location.reload()} style={{ background:"#534AB7", color:"#fff",
+            border:"none", borderRadius:8, padding:"10px 18px", cursor:"pointer" }}>
+            Intentar nuevamente
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display:"flex", minHeight:"100vh", background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
@@ -424,7 +496,7 @@ export default function Predictions() {
                 </tr>
               </thead>
               <tbody>
-                {PREDICTIONS.length === 0 ? (
+                {predictions.length === 0 ? (
                   <tr>
                     <td colSpan={8}>
                       <EmptyState
@@ -481,7 +553,7 @@ export default function Predictions() {
           </div>
 
           <p style={{ margin:0, fontSize:12, color:"#aaa" }}>
-            Mostrando {datos.length} de {PREDICTIONS.length} clientes
+            Mostrando {datos.length} de {predictions.length} clientes
           </p>
 
         </main>

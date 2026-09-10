@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -22,10 +23,6 @@ from app.schemas.mapa import VentaLocalidad
 from app.core.dependencies import get_current_user
 
 
-# ============================================================
-# Coordenadas reales (centroide aproximado) de cada localidad
-# de Bogota, usadas para ubicar los puntos del mapa de ventas.
-# ============================================================
 CENTROIDES_LOCALIDADES = {
     "Usaquen": (4.6946, -74.0307),
     "Chapinero": (4.6488, -74.0648),
@@ -55,32 +52,37 @@ router = APIRouter(
 )
 
 
-# ============================================================
-# KPIs DEL DASHBOARD
-# ============================================================
-
 @router.get("/kpis", response_model=KPIsOut)
 def obtener_kpis(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-    total_pedidos = db.query(
-        func.count(Pedido.id_pedido)
-    ).scalar() or 0
+    total_pedidos = (
+        db.query(func.count(Pedido.id_pedido))
+        .join(Cliente, Cliente.id_cliente == Pedido.id_cliente)
+        .filter(Cliente.autorizacion_datos == True)
+        .scalar() or 0
+    )
 
-    total_clientes = db.query(
-        func.count(Cliente.id_cliente)
-    ).scalar() or 0
+    total_clientes = (
+        db.query(func.count(Cliente.id_cliente))
+        .filter(Cliente.autorizacion_datos == True)
+        .scalar() or 0
+    )
 
-    ingresos_totales = db.query(
-        func.sum(Pedido.total)
-    ).scalar() or 0
+    ingresos_totales = (
+        db.query(func.sum(Pedido.total))
+        .join(Cliente, Cliente.id_cliente == Pedido.id_cliente)
+        .filter(Cliente.autorizacion_datos == True)
+        .scalar() or 0
+    )
 
-    clientes_activos = db.query(
-        func.count(
-            func.distinct(Pedido.id_cliente)
-        )
-    ).scalar() or 0
+    clientes_activos = (
+        db.query(func.count(func.distinct(Pedido.id_cliente)))
+        .join(Cliente, Cliente.id_cliente == Pedido.id_cliente)
+        .filter(Cliente.autorizacion_datos == True)
+        .scalar() or 0
+    )
 
     ticket_promedio = (
         ingresos_totales / total_pedidos
@@ -99,10 +101,6 @@ def obtener_kpis(
         clientes_activos=clientes_activos,
     )
 
-
-# ============================================================
-# VENTAS POR MES
-# ============================================================
 
 @router.get(
     "/sales",
@@ -127,6 +125,8 @@ def ventas_por_mes(
                 Pedido.total
             ).label("ingresos"),
         )
+        .join(Cliente, Cliente.id_cliente == Pedido.id_cliente)
+        .filter(Cliente.autorizacion_datos == True)
         .group_by(
             func.to_char(
                 Pedido.fecha_pedido,
@@ -155,6 +155,10 @@ def ventas_por_mes(
 # ============================================================
 # RIESGO DE ABANDONO
 # ============================================================
+# TEMPORAL: se calcula en vivo a partir del historial de pedidos
+# de cada cliente (promedio de días entre compras vs. días desde
+# la última compra). Cuando el modelo de Machine Learning esté
+# entrenado, esta función se reemplaza por sus predicciones reales.
 
 @router.get(
     "/churn-risk",
@@ -164,58 +168,49 @@ def riesgo_abandono(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-
-    # --------------------------------------------------------
-    # Bajo riesgo: 0% a 30%
-    # --------------------------------------------------------
-
-    bajo_riesgo = (
-        db.query(
-            func.count(
-                PrediccionCliente.id_prediccion
-            )
-        )
-        .filter(
-            PrediccionCliente.riesgo_abandono <= 0.30
-        )
-        .scalar()
-        or 0
+    clientes = (
+        db.query(Cliente)
+        .filter(Cliente.autorizacion_datos == True)
+        .all()
     )
 
-    # --------------------------------------------------------
-    # Riesgo medio: >30% hasta 60%
-    # --------------------------------------------------------
+    bajo_riesgo = 0
+    riesgo_medio = 0
+    alto_riesgo = 0
 
-    riesgo_medio = (
-        db.query(
-            func.count(
-                PrediccionCliente.id_prediccion
-            )
+    for cliente in clientes:
+        pedidos = (
+            db.query(Pedido)
+            .filter(Pedido.id_cliente == cliente.id_cliente)
+            .order_by(Pedido.fecha_pedido)
+            .all()
         )
-        .filter(
-            PrediccionCliente.riesgo_abandono > 0.30,
-            PrediccionCliente.riesgo_abandono <= 0.60,
-        )
-        .scalar()
-        or 0
-    )
 
-    # --------------------------------------------------------
-    # Alto riesgo: >60%
-    # --------------------------------------------------------
+        if not pedidos:
+            continue
 
-    alto_riesgo = (
-        db.query(
-            func.count(
-                PrediccionCliente.id_prediccion
-            )
-        )
-        .filter(
-            PrediccionCliente.riesgo_abandono > 0.60
-        )
-        .scalar()
-        or 0
-    )
+        fechas = [p.fecha_pedido for p in pedidos if p.fecha_pedido]
+        if not fechas:
+            continue
+
+        ultima_compra = fechas[-1]
+
+        if len(fechas) >= 2:
+            diffs = [(fechas[i + 1] - fechas[i]).days for i in range(len(fechas) - 1)]
+            intervalo = round(sum(diffs) / len(diffs)) if diffs else 30
+        else:
+            intervalo = 30
+
+        intervalo = max(intervalo, 1)
+        dias_sin_comprar = (datetime.now() - ultima_compra).days
+        ratio = dias_sin_comprar / intervalo
+
+        if ratio <= 1.2:
+            bajo_riesgo += 1
+        elif ratio <= 2:
+            riesgo_medio += 1
+        else:
+            alto_riesgo += 1
 
     return RiesgoAbandonoOut(
         bajo_riesgo=bajo_riesgo,
@@ -223,10 +218,6 @@ def riesgo_abandono(
         alto_riesgo=alto_riesgo,
     )
 
-
-# ============================================================
-# PRODUCTOS MAS VENDIDOS
-# ============================================================
 
 @router.get("/top-productos", response_model=list[ProductoTop])
 def productos_mas_vendidos(
@@ -257,10 +248,6 @@ def productos_mas_vendidos(
     ]
 
 
-# ============================================================
-# VENTAS POR CANAL
-# ============================================================
-
 @router.get("/ventas-por-canal", response_model=list[VentaPorCanal])
 def ventas_por_canal(
     db: Session = Depends(get_db),
@@ -286,10 +273,6 @@ def ventas_por_canal(
         for r in resultados
     ]
 
-
-# ============================================================
-# VENTAS POR LOCALIDAD (MAPA DE BOGOTA)
-# ============================================================
 
 @router.get("/ventas-por-localidad", response_model=list[VentaLocalidad])
 def ventas_por_localidad(

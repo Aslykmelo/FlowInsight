@@ -1,7 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
 
 // ─── Types ────────────────────────────────────────────
+interface ApiPrediction {
+  id_cliente: number;
+  cliente: string;
+  ultima_compra: string;
+  intervalo_dias: number;
+  proxima_compra_estimada: string;
+  probabilidad_recompra: number;
+  riesgo_abandono: number;
+  riesgo: "bajo" | "medio" | "alto";
+}
+
 interface Prediction {
   id: string;
   cliente: string;
@@ -12,19 +23,7 @@ interface Prediction {
   probabilidad: number;
 }
 
-// ─── Mock data (reemplazar con tu API) ────────────────
-const PREDICTIONS: Prediction[] = [
-  { id: "C001", cliente: "Restaurante El Fogón",     ultimaCompra: "15/04/2026", intervalo: 12, proximaCompra: "27/04/2026", riesgo: "bajo",  probabilidad: 92 },
-  { id: "C002", cliente: "Cafetería Central",         ultimaCompra: "02/04/2026", intervalo: 18, proximaCompra: "20/04/2026", riesgo: "alto",  probabilidad: 34 },
-  { id: "C003", cliente: "Hotel Dann Carlton",        ultimaCompra: "20/04/2026", intervalo: 10, proximaCompra: "30/04/2026", riesgo: "bajo",  probabilidad: 88 },
-  { id: "C004", cliente: "Panadería La Espiga",       ultimaCompra: "10/04/2026", intervalo: 14, proximaCompra: "24/04/2026", riesgo: "medio", probabilidad: 61 },
-  { id: "C005", cliente: "Supermercado Éxito Norte",  ultimaCompra: "25/03/2026", intervalo: 30, proximaCompra: "24/04/2026", riesgo: "alto",  probabilidad: 28 },
-  { id: "C006", cliente: "Club El Nogal",             ultimaCompra: "18/04/2026", intervalo: 7,  proximaCompra: "25/04/2026", riesgo: "bajo",  probabilidad: 95 },
-  { id: "C007", cliente: "Colegio Los Alpes",         ultimaCompra: "05/04/2026", intervalo: 21, proximaCompra: "26/04/2026", riesgo: "medio", probabilidad: 55 },
-  { id: "C008", cliente: "Clínica Shaio",             ultimaCompra: "12/04/2026", intervalo: 15, proximaCompra: "27/04/2026", riesgo: "bajo",  probabilidad: 81 },
-  { id: "C009", cliente: "Bar La Candelaria",         ultimaCompra: "01/03/2026", intervalo: 45, proximaCompra: "15/04/2026", riesgo: "alto",  probabilidad: 18 },
-  { id: "C010", cliente: "Jardín Infantil Semillas",  ultimaCompra: "22/04/2026", intervalo: 8,  proximaCompra: "30/04/2026", riesgo: "bajo",  probabilidad: 90 },
-];
+const API_URL = "http://localhost:8000";
 
 // ─── Helpers ──────────────────────────────────────────
 const RIESGO_STYLE: Record<string, { color: string; bg: string; label: string }> = {
@@ -59,16 +58,41 @@ function BarProbabilidad({ valor }: { valor: number }) {
 export default function Predictions() {
   const [filtro, setFiltro] = useState<"todos" | "bajo" | "medio" | "alto">("todos");
   const [busqueda, setBusqueda] = useState("");
+  const [predicciones, setPredicciones] = useState<Prediction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const datos = PREDICTIONS
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    fetch(`${API_URL}/predictions/`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => {
+        if (!res.ok) throw new Error("No se pudo cargar las predicciones");
+        return res.json();
+      })
+      .then((data: ApiPrediction[]) => {
+        setPredicciones(data.map((p) => ({
+          id: `C${String(p.id_cliente).padStart(3, "0")}`,
+          cliente: p.cliente,
+          ultimaCompra: p.ultima_compra,
+          intervalo: p.intervalo_dias,
+          proximaCompra: p.proxima_compra_estimada,
+          riesgo: p.riesgo,
+          probabilidad: Math.round(p.probabilidad_recompra),
+        })));
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const datos = predicciones
     .filter(p => filtro === "todos" || p.riesgo === filtro)
     .filter(p => p.cliente.toLowerCase().includes(busqueda.toLowerCase()) ||
                  p.id.toLowerCase().includes(busqueda.toLowerCase()));
 
   const conteo = {
-    bajo:  PREDICTIONS.filter(p => p.riesgo === "bajo").length,
-    medio: PREDICTIONS.filter(p => p.riesgo === "medio").length,
-    alto:  PREDICTIONS.filter(p => p.riesgo === "alto").length,
+    bajo:  predicciones.filter(p => p.riesgo === "bajo").length,
+    medio: predicciones.filter(p => p.riesgo === "medio").length,
+    alto:  predicciones.filter(p => p.riesgo === "alto").length,
   };
 
   return (
@@ -92,6 +116,21 @@ export default function Predictions() {
         </header>
 
         <main style={{ padding:"1.5rem", display:"flex", flexDirection:"column", gap:"1.25rem" }}>
+
+          {error && (
+            <div style={{ background:"#FAECE7", border:"0.5px solid #E24B4A", borderRadius:12,
+              padding:"0.875rem 1.25rem", fontSize:13, color:"#993C1D" }}>
+              {error}
+            </div>
+          )}
+
+          <div style={{ background:"#FAEEDA", border:"0.5px solid #EF9F27", borderRadius:12,
+            padding:"0.875rem 1.25rem", fontSize:12.5, color:"#7a5410", lineHeight:1.5 }}>
+            <strong>Modelo v1.0 (RandomForestRegressor + GradientBoostingClassifier sobre RFM):</strong> entrenado
+            y evaluado con un corte temporal fuera de muestra. Resultado real: R² = 0.23 (meta ≥ 0.75) y
+            F1 = 0.30 (meta ≥ 0.78) — por debajo del umbral de la tesis. Las predicciones de esta página son
+            reales (no inventadas), pero su precisión hoy es limitada; ver Capítulo IV para el diagnóstico completo.
+          </div>
 
           {/* Resumen riesgo */}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:12 }}>
@@ -133,7 +172,13 @@ export default function Predictions() {
                 </tr>
               </thead>
               <tbody>
-                {datos.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} style={{ padding:"2rem", textAlign:"center", color:"#aaa" }}>
+                      Cargando predicciones...
+                    </td>
+                  </tr>
+                ) : datos.length === 0 ? (
                   <tr>
                     <td colSpan={7} style={{ padding:"2rem", textAlign:"center", color:"#aaa" }}>
                       No se encontraron resultados
@@ -160,7 +205,7 @@ export default function Predictions() {
           </div>
 
           <p style={{ margin:0, fontSize:12, color:"#aaa" }}>
-            Mostrando {datos.length} de {PREDICTIONS.length} clientes
+            Mostrando {datos.length} de {predicciones.length} clientes
           </p>
 
         </main>

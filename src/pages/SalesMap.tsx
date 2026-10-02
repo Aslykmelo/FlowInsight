@@ -53,10 +53,10 @@ export default function SalesMap() {
   const localidadTop = [...datos].sort((a, b) => b.ingresos - a.ingresos)[0];
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
+    <div className="app-shell" style={{ background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
       <Sidebar />
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      <div className="app-main">
         <header style={{ background: "#fff", borderBottom: "0.5px solid #e0e0e0",
           padding: "0.875rem 1.5rem" }}>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Mapa de ventas de Bogotá</h1>

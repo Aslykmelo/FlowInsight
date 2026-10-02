@@ -373,14 +373,14 @@ export default function Dashboard() {
   ];
 
   return (
-    <div style={{ display:"flex", minHeight:"100vh", background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+    <div className="app-shell" style={{ background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
       <Sidebar />
 
       <style>{`
         @keyframes flowinsight-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
       `}</style>
 
-      <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"auto" }}>
+      <div className="app-main" style={{ overflow:"auto" }}>
         {/* HEADER */}
         <header style={{ background:"#fff", borderBottom:"0.5px solid #e0e0e0",
           padding:"0.875rem 1.5rem", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
@@ -484,7 +484,7 @@ export default function Dashboard() {
                 </Card>
               )}
 
-              <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)", gap:"1.25rem" }}>
+              <div className="grid-auto-wide">
                 {salesState.loading && !salesState.data ? <ChartSkeleton /> : (
                   <Card title="Ventas mensuales" error={salesState.error}>
                     <ResponsiveContainer width="100%" height={240}>
@@ -539,7 +539,7 @@ export default function Dashboard() {
           {/* ================= PESTAÑA CLIENTES ================= */}
           {activeTab === "clientes" && (
             <>
-              <div style={{ display:"grid", gridTemplateColumns:"340px minmax(0,1fr)", gap:"1.25rem" }}>
+              <div className="grid-auto-wide">
                 {churnState.loading && !churnState.data ? <ChartSkeleton height={200} /> : (
                   <Card title="Riesgo de abandono" error={churnState.error}>
                     <div style={{ maxWidth:220, margin:"0 auto" }}>
@@ -583,8 +583,8 @@ export default function Dashboard() {
 
               {clientesState.loading && !clientesState.data ? <ChartSkeleton height={200} /> : (
                 <Card title="Clientes en riesgo" error={clientesState.error}>
-                  <div style={{ border:"0.5px solid #e0e0e0", borderRadius:12, overflow:"hidden" }}>
-                    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+                  <div className="table-scroll" style={{ border:"0.5px solid #e0e0e0", borderRadius:12 }}>
+                    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, minWidth:420 }}>
                       <thead>
                         <tr style={{ background:"#f9f9f9", borderBottom:"0.5px solid #e0e0e0" }}>
                           {["Cliente","Ciudad","Monto total","Última compra"].map((h) => (

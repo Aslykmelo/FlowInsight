@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { useTextSize } from "../context/TextSizeContext";
 
 const NAV = [
@@ -63,48 +63,72 @@ function TextSizeControl() {
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [abierto, setAbierto] = useState(false);
+
+  const irA = (path: string) => {
+    navigate(path);
+    setAbierto(false); // en movil, navegar cierra el menu
+  };
 
   return (
-    <aside
-      aria-label="Navegación principal"
-      style={{ width:220, minHeight:"100vh", background:"#16163a",
-      display:"flex", flexDirection:"column", padding:"1.5rem 0", flexShrink:0 }}>
-      <div style={{ padding:"0 1.25rem 1.5rem" }}>
-        <p style={{ margin:0, fontSize:19, fontWeight:500, color:"#fff" }}>
-          <span aria-hidden="true">🔮</span> FlowInsight
-        </p>
-        <p style={{ margin:"4px 0 0", fontSize:11, color:"#8888aa" }}>W&T Food S.A.S</p>
-      </div>
-      <nav style={{ flex:1 }}>
-        {NAV.map(item => {
-          const active = location.pathname === item.path;
-          return (
-            <button key={item.label}
-              type="button"
-              aria-current={active ? "page" : undefined}
-              aria-label={item.label}
-              onClick={() => navigate(item.path)}
-              style={{ width:"100%",
-                background: active ? "rgba(83,74,183,0.2)":"transparent",
-                border:"none", borderLeft: active ? "3px solid #534AB7":"3px solid transparent",
-                color: active ? "#fff":"#8888aa", padding:"10px 1.25rem",
-                textAlign:"left", cursor:"pointer", fontSize:14,
-                display:"flex", alignItems:"center", gap:10 }}>
-              <span aria-hidden="true" style={emojiStyle}>{item.emoji}</span>
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
-      </nav>
+    <>
+      <button
+        type="button"
+        className="sidebar-toggle"
+        aria-label={abierto ? "Cerrar menú" : "Abrir menú"}
+        aria-expanded={abierto}
+        onClick={() => setAbierto((v) => !v)}
+      >
+        {abierto ? "✕" : "☰"}
+      </button>
 
-      <TextSizeControl />
+      <div
+        className={`sidebar-backdrop${abierto ? " sidebar-open" : ""}`}
+        onClick={() => setAbierto(false)}
+      />
 
-      <div style={{ padding:"1rem 1.25rem", borderTop:"0.5px solid #2a2a4a",
-        display:"flex", alignItems:"center", gap:10 }}>
-        <div role="img" aria-label="Usuario administrador" style={{ width:34, height:34, borderRadius:"50%", background:"#534AB7",
-          display:"flex", alignItems:"center", justifyContent:"center",
-          fontSize:12, color:"#fff", fontWeight:500, flexShrink:0 }}>AD</div>
-      </div>
-    </aside>
+      <aside
+        aria-label="Navegación principal"
+        className={`sidebar${abierto ? " sidebar-open" : ""}`}
+        style={{ width:220, minHeight:"100vh", background:"#16163a",
+        display:"flex", flexDirection:"column", padding:"1.5rem 0", flexShrink:0 }}>
+        <div style={{ padding:"0 1.25rem 1.5rem" }}>
+          <p style={{ margin:0, fontSize:19, fontWeight:500, color:"#fff" }}>
+            <span aria-hidden="true">🔮</span> FlowInsight
+          </p>
+          <p style={{ margin:"4px 0 0", fontSize:11, color:"#8888aa" }}>W&T Food S.A.S</p>
+        </div>
+        <nav style={{ flex:1, overflowY:"auto" }}>
+          {NAV.map(item => {
+            const active = location.pathname === item.path;
+            return (
+              <button key={item.label}
+                type="button"
+                aria-current={active ? "page" : undefined}
+                aria-label={item.label}
+                onClick={() => irA(item.path)}
+                style={{ width:"100%",
+                  background: active ? "rgba(83,74,183,0.2)":"transparent",
+                  border:"none", borderLeft: active ? "3px solid #534AB7":"3px solid transparent",
+                  color: active ? "#fff":"#8888aa", padding:"10px 1.25rem",
+                  textAlign:"left", cursor:"pointer", fontSize:14,
+                  display:"flex", alignItems:"center", gap:10 }}>
+                <span aria-hidden="true" style={emojiStyle}>{item.emoji}</span>
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <TextSizeControl />
+
+        <div style={{ padding:"1rem 1.25rem", borderTop:"0.5px solid #2a2a4a",
+          display:"flex", alignItems:"center", gap:10 }}>
+          <div role="img" aria-label="Usuario administrador" style={{ width:34, height:34, borderRadius:"50%", background:"#534AB7",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:12, color:"#fff", fontWeight:500, flexShrink:0 }}>AD</div>
+        </div>
+      </aside>
+    </>
   );
 }

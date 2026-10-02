@@ -82,10 +82,10 @@ export default function Promotions() {
   const clientesFiltrados = clientes.filter((c) => filtro === "todos" || c.categoria === filtro);
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
+    <div className="app-shell" style={{ background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
       <Sidebar />
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      <div className="app-main">
         <header style={{ background: "#fff", borderBottom: "0.5px solid #e0e0e0",
           padding: "0.875rem 1.5rem" }}>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Mensajes de promoción</h1>
@@ -119,7 +119,8 @@ export default function Promotions() {
             ) : error ? (
               <p style={{ padding: 16, fontSize: 13, color: "#993C1D" }}>{error}</p>
             ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <div className="table-scroll">
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 560 }}>
                 <thead>
                   <tr style={{ background: "#f9f9f9", borderBottom: "0.5px solid #e0e0e0" }}>
                     {["Cliente", "Teléfono", "Días sin comprar", "Categoría"].map((h) => (
@@ -164,6 +165,7 @@ export default function Promotions() {
                   })}
                 </tbody>
               </table>
+              </div>
             )}
 
             {!loading && !error && (

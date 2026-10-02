@@ -1,3 +1,139 @@
 body {
   margin: 0;
 }
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* ============================================================
+   Layout responsivo compartido (sidebar + contenido)
+   ============================================================ */
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0; /* evita que tablas/grids anchos empujen el layout */
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-toggle {
+  display: none;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+/* Cualquier tabla envuelta en .table-scroll se desplaza horizontalmente
+   dentro de su propio contenedor en vez de romper el ancho de la pagina. */
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* Grids que se acomodan solas: se usan en vez de columnas fijas para que
+   las tarjetas/KPIs se reacomoden en pantallas angostas sin media queries. */
+.grid-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.grid-auto-wide {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
+}
+
+@media (max-width: 860px) {
+  .app-shell {
+    display: block;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 240px;
+    max-width: 80vw;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    z-index: 50;
+  }
+
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-toggle {
+    display: flex;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 60;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: none;
+    background: #16163a;
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+
+  .sidebar-backdrop.sidebar-open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(10,10,20,0.45);
+    z-index: 40;
+  }
+
+  .app-main {
+    padding-top: 56px; /* deja espacio para el boton hamburguesa */
+  }
+}
+
+/* ============================================================
+   Login: panel visual + panel de formulario de ancho fijo
+   ============================================================ */
+
+.login-shell {
+  min-height: 100vh;
+  display: flex;
+}
+
+.login-visual {
+  flex: 1;
+  min-width: 0;
+}
+
+.login-form-panel {
+  width: 440px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 760px) {
+  .login-shell {
+    flex-direction: column;
+  }
+
+  .login-visual {
+    padding: 2rem 1.5rem !important;
+  }
+
+  .login-form-panel {
+    width: 100%;
+    padding: 2rem 1.5rem !important;
+  }
+}
+

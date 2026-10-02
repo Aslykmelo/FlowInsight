@@ -67,9 +67,8 @@ export default function Login() {
 
   return (
     <div
+      className="login-shell"
       style={{
-        minHeight: "100vh",
-        display: "flex",
         fontFamily: "system-ui, sans-serif",
       }}
     >
@@ -77,8 +76,8 @@ export default function Login() {
           PANEL IZQUIERDO
       ========================== */}
       <div
+        className="login-visual"
         style={{
-          flex: 1,
           background:
             "linear-gradient(135deg, #16163a 0%, #2d2b6b 50%, #1a3a5c 100%)",
           display: "flex",
@@ -244,15 +243,14 @@ export default function Login() {
           PANEL DERECHO
       ========================== */}
       <div
+        className="login-form-panel"
         style={{
-          width: 440,
           background: "#fff",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
           padding: "3rem 2.5rem",
-          flexShrink: 0,
         }}
       >
         <div

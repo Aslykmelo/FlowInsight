@@ -33,3 +33,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Reportes generados por la app (se regeneran solos, no son código)
+backend/generated_reports/

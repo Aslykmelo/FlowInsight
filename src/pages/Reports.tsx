@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Sidebar from "../components/Sidebar";
+import EmptyState from "../components/EmptyState";
 
 // ─── Types ────────────────────────────────────────────
+type Formato = "xlsx" | "pdf";
+
 interface Report {
   id: number;
   nombre: string;
   tipo: string;
+  formato: Formato;
   fecha: string;
   estado: "listo" | "generando" | "error";
 }
@@ -38,8 +42,11 @@ const ESTADO_STYLE: Record<Report["estado"], { color: string; bg: string; label:
   error:     { color: "#993C1D", bg: "#FAECE7", label: "Error"     },
 };
 
-// El backend por ahora solo genera .xlsx, así que el selector
-// ofrece los tipos de reporte disponibles, no formatos de archivo.
+const FORMATO_STYLE: Record<Formato, { color: string; bg: string; label: string }> = {
+  xlsx: { color: "#0F6E56", bg: "#E1F5EE", label: "Excel" },
+  pdf:  { color: "#993C1D", bg: "#FAECE7", label: "PDF"   },
+};
+
 const TIPOS: TipoReporte[] = [
   { value: "ventas",       label: "Ventas mensuales"   },
   { value: "clientes",     label: "Historial de clientes" },
@@ -51,22 +58,27 @@ const TIPO_LABEL: Record<string, string> = Object.fromEntries(
   TIPOS.map((t) => [t.value, t.label])
 );
 
-// ─── Selector de tipo de reporte (dropdown vía portal) ─
+const formatoValido = (formato: string | null): Formato =>
+  formato === "pdf" ? "pdf" : "xlsx";
+
+// ─── Selector de tipo + formato de reporte (dropdown vía portal) ─
 function TipoDropdown({
   rect,
   onSelect,
 }: {
   rect: DOMRect;
-  onSelect: (tipo: TipoReporte) => void;
+  onSelect: (tipo: TipoReporte, formato: Formato) => void;
 }) {
   return createPortal(
     <div
       data-format-dropdown
+      role="menu"
+      aria-label="Tipos de reporte"
       style={{
         position: "fixed",
         top: rect.bottom + 6,
-        left: Math.max(8, rect.right - 200),
-        width: 200,
+        left: Math.max(8, rect.right - 280),
+        width: 280,
         background: "#fff",
         border: "0.5px solid #e0e0e0",
         borderRadius: 8,
@@ -76,26 +88,38 @@ function TipoDropdown({
       }}
     >
       {TIPOS.map((t, idx) => (
-        <button
+        <div
           key={t.value}
-          onClick={() => onSelect(t)}
           style={{
-            display: "block",
-            width: "100%",
-            textAlign: "left",
-            background: "transparent",
-            border: "none",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "9px 14px", gap: 10,
             borderBottom: idx < TIPOS.length - 1 ? "0.5px solid #f0f0f0" : "none",
-            padding: "9px 14px",
-            fontSize: 13,
-            color: "#333",
-            cursor: "pointer",
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "#f5f5f7")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
-          {t.label}
-        </button>
+          <span style={{ fontSize: 13, color: "#333" }}>{t.label}</span>
+          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+            <button
+              role="menuitem"
+              onClick={() => onSelect(t, "xlsx")}
+              aria-label={`Generar ${t.label} en Excel`}
+              style={{ background: "#E1F5EE", color: "#0F6E56", border: "none",
+                borderRadius: 6, padding: "4px 10px", cursor: "pointer",
+                fontSize: 11, fontWeight: 500 }}
+            >
+              Excel
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => onSelect(t, "pdf")}
+              aria-label={`Generar ${t.label} en PDF`}
+              style={{ background: "#FAECE7", color: "#993C1D", border: "none",
+                borderRadius: 6, padding: "4px 10px", cursor: "pointer",
+                fontSize: 11, fontWeight: 500 }}
+            >
+              PDF
+            </button>
+          </div>
+        </div>
       ))}
     </div>,
     document.body
@@ -106,6 +130,8 @@ function TipoDropdown({
 function Toast({ message }: { message: string }) {
   return (
     <div
+      role="status"
+      aria-live="polite"
       style={{
         position: "fixed",
         bottom: 24,
@@ -128,7 +154,7 @@ function Toast({ message }: { message: string }) {
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
-      <span style={{ fontSize: 16 }}>⬇️</span>
+      <span aria-hidden="true" style={{ fontSize: 16 }}>⬇️</span>
       <span style={{ fontSize: 13, color: "#0F6E56", fontWeight: 500 }}>{message}</span>
     </div>
   );
@@ -151,6 +177,7 @@ export default function Reports() {
   const [openDropdown, setOpenDropdown] = useState<DropdownState | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const headerButtonRef = useRef<HTMLButtonElement>(null);
 
   // ───────────────────────────────────────────
   // CARGAR REPORTES DEL BACKEND
@@ -181,6 +208,7 @@ export default function Reports() {
         id: r.id_reporte,
         nombre: r.nombre || TIPO_LABEL[r.tipo || ""] || "Reporte",
         tipo: r.tipo ? (TIPO_LABEL[r.tipo] || r.tipo) : "—",
+        formato: formatoValido(r.formato),
         fecha: formatoFecha(r.fecha),
         estado: estadoValido(r.estado),
       }));
@@ -198,7 +226,7 @@ export default function Reports() {
     cargarReportes();
   }, []);
 
-  // Cerrar el dropdown al hacer click fuera
+  // Cerrar el dropdown al hacer click fuera, o con Escape desde el teclado
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       const target = e.target as HTMLElement;
@@ -206,8 +234,15 @@ export default function Reports() {
         setOpenDropdown(null);
       }
     }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpenDropdown(null);
+    }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   useEffect(() => {
@@ -230,10 +265,16 @@ export default function Reports() {
     setOpenDropdown({ id, rect: e.currentTarget.getBoundingClientRect() });
   };
 
+  // Permite abrir el mismo dropdown del header desde el botón del Empty State
+  const abrirDropdownHeader = () => {
+    const rect = headerButtonRef.current?.getBoundingClientRect();
+    if (rect) setOpenDropdown({ id: "header", rect });
+  };
+
   // ───────────────────────────────────────────
   // GENERAR REPORTE (POST /reports/generate)
   // ───────────────────────────────────────────
-  const generarReporte = async (tipo: TipoReporte) => {
+  const generarReporte = async (tipo: TipoReporte, formato: Formato) => {
     setOpenDropdown(null);
 
     const token = localStorage.getItem("token");
@@ -243,7 +284,7 @@ export default function Reports() {
     }
 
     setGenerando(true);
-    mostrarToast(`Generando reporte de ${tipo.label}...`);
+    mostrarToast(`Generando reporte de ${tipo.label} en ${FORMATO_STYLE[formato].label}...`);
 
     try {
       const response = await fetch(`${API_URL}/reports/generate`, {
@@ -252,7 +293,7 @@ export default function Reports() {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ tipo: tipo.value, formato: "xlsx" }),
+        body: JSON.stringify({ tipo: tipo.value, formato }),
       });
 
       if (!response.ok) {
@@ -297,7 +338,7 @@ export default function Reports() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${report.nombre}.xlsx`;
+      a.download = `${report.nombre}.${report.formato}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -390,6 +431,7 @@ export default function Reports() {
           </div>
 
           <button
+            ref={headerButtonRef}
             data-format-trigger
             onClick={(e) => toggleDropdown("header", e)}
             disabled={generando}
@@ -406,24 +448,37 @@ export default function Reports() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#f9f9f9", borderBottom: "0.5px solid #e0e0e0" }}>
-                  {["Reporte", "Tipo", "Fecha de generación", "Estado", "", ""].map((h) => (
-                    <th key={h} style={{ padding: "10px 16px", textAlign: "left",
+                  {["Reporte", "Tipo", "Formato", "Fecha de generación", "Estado", "", ""].map((h, i) => (
+                    <th key={`${h}-${i}`} style={{ padding: "10px 16px", textAlign: "left",
                       fontWeight: 500, color: "#666", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {reports.length === 0 ? (
-                  <tr><td colSpan={6} style={{ padding: "2rem", textAlign: "center", color: "#aaa" }}>
-                    No hay reportes generados todavía
+                  <tr><td colSpan={7}>
+                    <EmptyState
+                      icon="📄"
+                      title="Todavía no has generado ningún reporte"
+                      description="Genera tu primer reporte de ventas, clientes o riesgo de abandono."
+                      actionLabel="Generar reporte"
+                      onAction={abrirDropdownHeader}
+                    />
                   </td></tr>
                 ) : reports.map((r, i) => {
                   const s = ESTADO_STYLE[r.estado];
+                  const f = FORMATO_STYLE[r.formato];
                   return (
                     <tr key={r.id} style={{ borderBottom: "0.5px solid #f0f0f0",
                       background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
                       <td style={{ padding: "12px 16px", fontWeight: 500 }}>{r.nombre}</td>
                       <td style={{ padding: "12px 16px", color: "#555" }}>{r.tipo}</td>
+                      <td style={{ padding: "12px 16px" }}>
+                        <span style={{ fontSize: 12, color: f.color, background: f.bg,
+                          padding: "3px 10px", borderRadius: 6, fontWeight: 500 }}>
+                          {f.label}
+                        </span>
+                      </td>
                       <td style={{ padding: "12px 16px", color: "#555" }}>{r.fecha}</td>
                       <td style={{ padding: "12px 16px" }}>
                         <span style={{ fontSize: 12, color: s.color, background: s.bg,
@@ -471,7 +526,7 @@ export default function Reports() {
       {openDropdown?.id === "header" && (
         <TipoDropdown
           rect={openDropdown.rect}
-          onSelect={(tipo) => generarReporte(tipo)}
+          onSelect={(tipo, formato) => generarReporte(tipo, formato)}
         />
       )}
 

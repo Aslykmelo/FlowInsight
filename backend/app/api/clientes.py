@@ -36,7 +36,7 @@ def listar_clientes_resumen(
     db: Session = Depends(get_db),
     usuario_actual=Depends(get_current_user),
 ):
-    clientes = db.query(Cliente).all()
+    clientes = db.query(Cliente).filter(Cliente.autorizacion_datos == True).all()
     resultado = []
 
     for cliente in clientes:

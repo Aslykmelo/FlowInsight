@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Sidebar from "../components/Sidebar";
 
 // ─── Types ────────────────────────────────────────────
@@ -67,6 +67,16 @@ function UserModal({
   const [rol, setRol] = useState<User["rol"]>(user?.rol ?? "Analista");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   const handleSubmit = () => {
     if (!nombre.trim() || !email.trim()) {
@@ -98,33 +108,35 @@ function UserModal({
       onClick={onClose}
     >
       <div
+        role="dialog" aria-modal="true" aria-labelledby="user-modal-title"
         style={{ background: "#fff", borderRadius: 12, padding: "2rem", width: 420,
           boxShadow: "0 8px 32px rgba(0,0,0,0.12)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-          <p style={{ margin: 0, fontSize: 18, fontWeight: 500 }}>
+          <p id="user-modal-title" style={{ margin: 0, fontSize: 18, fontWeight: 500 }}>
             {esEdicion ? "Editar usuario" : "Agregar usuario"}
           </p>
-          <button onClick={onClose} style={{ background: "transparent", border: "none",
+          <button ref={closeButtonRef} onClick={onClose} aria-label="Cerrar formulario de usuario"
+            style={{ background: "transparent", border: "none",
             cursor: "pointer", fontSize: 22, color: "#aaa", lineHeight: 1 }}>×</button>
         </div>
 
         <div style={{ marginBottom: 14 }}>
-          <label style={labelStyle}>Nombre</label>
-          <input value={nombre} onChange={(e) => setNombre(e.target.value)}
+          <label htmlFor="user-nombre" style={labelStyle}>Nombre</label>
+          <input id="user-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)}
             placeholder="Nombre completo" style={inputStyle} />
         </div>
 
         <div style={{ marginBottom: 14 }}>
-          <label style={labelStyle}>Correo electrónico</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+          <label htmlFor="user-email" style={labelStyle}>Correo electrónico</label>
+          <input id="user-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
             placeholder="usuario@flowinsight.com" style={inputStyle} />
         </div>
 
         <div style={{ marginBottom: 14 }}>
-          <label style={labelStyle}>Rol</label>
-          <select value={rol} onChange={(e) => setRol(e.target.value as User["rol"])}
+          <label htmlFor="user-rol" style={labelStyle}>Rol</label>
+          <select id="user-rol" value={rol} onChange={(e) => setRol(e.target.value as User["rol"])}
             style={{ ...inputStyle, background: "#fff" }}>
             <option value="Analista">Analista</option>
             <option value="Administrador">Administrador</option>
@@ -132,18 +144,20 @@ function UserModal({
         </div>
 
         <div style={{ marginBottom: mensajeError ? 10 : 20 }}>
-          <label style={labelStyle}>
+          <label htmlFor="user-password" style={labelStyle}>
             {esEdicion ? "Nueva contraseña (opcional)" : "Contraseña"}
           </label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+          <input id="user-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
             placeholder={esEdicion ? "Dejar en blanco para no cambiarla" : "••••••••"}
+            aria-describedby={mensajeError ? "user-modal-error" : undefined}
             style={inputStyle} />
         </div>
 
         {mensajeError && (
-          <div style={{ background: "#FAECE7", border: "0.5px solid #E24B4A", borderRadius: 8,
+          <div id="user-modal-error" role="alert" aria-live="assertive"
+            style={{ background: "#FAECE7", border: "0.5px solid #E24B4A", borderRadius: 8,
             padding: "10px 14px", fontSize: 13, color: "#993C1D", marginBottom: 16 }}>
-            ⚠️ {mensajeError}
+            <span aria-hidden="true">⚠️</span> {mensajeError}
           </div>
         )}
 

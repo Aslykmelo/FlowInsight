@@ -22,6 +22,13 @@ interface CampoSistema {
 
 const API_URL = "http://127.0.0.1:8000";
 
+// Oculta visualmente pero deja perceptible para lectores de pantalla
+// y alcanzable con Tab (a diferencia de display:none).
+const srOnly: React.CSSProperties = {
+  position: "absolute", width: 1, height: 1, padding: 0, margin: -1,
+  overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0,
+};
+
 // Campos que el backend espera recibir mapeados
 const CAMPOS_SISTEMA: CampoSistema[] = [
   { key: "cliente_nombre",  label: "Nombre del cliente" },
@@ -46,9 +53,12 @@ export default function UploadExcel() {
   const [state, setState] = useState<UploadState>({ status: "idle", file: null, progress: 0 });
   const [mapeo, setMapeo] = useState<Record<string, string>>({});
   const [mapeoError, setMapeoError] = useState("");
+  const [autorizado, setAutorizado] = useState(false);
   const navigate = useNavigate();
 
   const handleFile = useCallback((file: File) => {
+    if (!autorizado) return; // sin autorización confirmada, no se procesa ningún archivo
+
     if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
       setState({ status: "error", file: null, progress: 0, message: "Solo se aceptan archivos .xlsx o .xls" });
       return;
@@ -56,13 +66,14 @@ export default function UploadExcel() {
     setMapeo({});
     setMapeoError("");
     setState({ status: "configurando", file, progress: 0 });
-  }, []);
+  }, [autorizado]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    if (!autorizado) return;
     const file = e.dataTransfer.files[0];
     if (file) handleFile(file);
-  }, [handleFile]);
+  }, [handleFile, autorizado]);
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -98,12 +109,13 @@ export default function UploadExcel() {
 
       const data = response.data;
       const resumen =
-        `Filas procesadas: ${data.filas_procesadas} · ` +
-        `Clientes nuevos: ${data.clientes_creados} · ` +
-        `Productos nuevos: ${data.productos_creados} · ` +
-        `Pedidos creados: ${data.pedidos_creados}` +
-        (data.filas_con_error > 0 ? ` · Filas con error: ${data.filas_con_error}` : "");
-
+            `Filas procesadas: ${data.filas_procesadas} · ` +
+            `Clientes nuevos: ${data.clientes_creados} · ` +
+            `Productos nuevos: ${data.productos_creados} · ` +
+            `Pedidos creados: ${data.pedidos_creados}` +
+            (data.filas_con_error > 0 ? ` · Filas con error: ${data.filas_con_error}` : "") +
+            (data.filas_duplicadas > 0 ? ` · Duplicadas (omitidas): ${data.filas_duplicadas}` : "");
+            
       setState({ status: "success", file, progress: 100, message: resumen });
     } catch (err) {
       const axiosError = err as AxiosError<{ detail?: string }>;
@@ -164,10 +176,30 @@ export default function UploadExcel() {
         <main style={{ padding:"2rem", display:"flex", flexDirection:"column",
           alignItems:"center", gap:"1.5rem" }}>
 
+          {/* Confirmación de autorización de datos */}
+          {!enConfiguracionOSubida && state.status !== "success" && (
+            <div style={{ width:"100%", maxWidth:560, background:"#FAEEDA",
+              border:"0.5px solid #EF9F27", borderRadius:12, padding:"1rem 1.25rem",
+              display:"flex", alignItems:"flex-start", gap:12 }}>
+              <input
+                type="checkbox"
+                id="autorizacion"
+                checked={autorizado}
+                onChange={(e) => setAutorizado(e.target.checked)}
+                style={{ marginTop:3, width:16, height:16, cursor:"pointer", flexShrink:0 }}
+              />
+              <label htmlFor="autorizacion" style={{ fontSize:13, color:"#7A4A0A", cursor:"pointer", lineHeight:1.5 }}>
+                Confirmo que cuento con la <strong>autorización expresa</strong> de los clientes incluidos
+                en este archivo para el tratamiento de sus datos personales, conforme a la Ley 1581 de 2012.
+              </label>
+            </div>
+          )}
+
           {/* Drop zone */}
           {(state.status === "idle" || state.status === "dragging") && (
-            <div
-              onDragOver={(e) => { e.preventDefault(); setState((p) => ({ ...p, status:"dragging" })); }}
+            <label
+              htmlFor="file-input"
+              onDragOver={(e) => { e.preventDefault(); if (autorizado) setState((p) => ({ ...p, status:"dragging" })); }}
               onDragLeave={() => setState((p) => ({ ...p, status:"idle" }))}
               onDrop={handleDrop}
               style={{
@@ -175,14 +207,14 @@ export default function UploadExcel() {
                 border: state.status === "dragging" ? "2px dashed #534AB7" : "2px dashed #ccc",
                 borderRadius:16, padding:"3rem 2rem",
                 display:"flex", flexDirection:"column", alignItems:"center", gap:16,
-                background: state.status === "dragging" ? "#EEEDFE" : "#fff",
-                transition:"all 0.2s", cursor:"pointer",
+                background: state.status === "dragging" ? "#EEEDFE" : autorizado ? "#fff" : "#f5f5f7",
+                opacity: autorizado ? 1 : 0.6,
+                transition:"all 0.2s", cursor: autorizado ? "pointer" : "not-allowed",
               }}
-              onClick={() => document.getElementById("file-input")?.click()}
             >
-              <span style={{ fontSize:48 }}>📂</span>
+              <span aria-hidden="true" style={{ fontSize:48 }}>📂</span>
               <p style={{ margin:0, fontSize:16, fontWeight:500, color:"#333" }}>
-                Arrastra tu archivo aquí
+                {autorizado ? "Arrastra tu archivo aquí" : "Marca la casilla de autorización para continuar"}
               </p>
               <p style={{ margin:0, fontSize:13, color:"#888" }}>
                 o haz clic para seleccionarlo
@@ -191,9 +223,15 @@ export default function UploadExcel() {
                 background:"#f5f5f7", padding:"4px 12px", borderRadius:20 }}>
                 .xlsx / .xls — máx. 10 MB
               </span>
-              <input id="file-input" type="file" accept=".xlsx,.xls"
-                style={{ display:"none" }} onChange={handleInput} />
-            </div>
+              <input
+                id="file-input"
+                type="file"
+                accept=".xlsx,.xls"
+                disabled={!autorizado}
+                style={srOnly}
+                onChange={handleInput}
+              />
+            </label>
           )}
 
           {/* Configurar columnas */}
@@ -202,15 +240,20 @@ export default function UploadExcel() {
               border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1.5rem" }}>
               <p style={{ margin:"0 0 4px", fontSize:15, fontWeight:500 }}>Configurar columnas</p>
               <p style={{ margin:"0 0 16px", fontSize:13, color:"#888" }}>
-                📄 {state.file.name} — asocia cada campo con la columna correspondiente del archivo
+                <span aria-hidden="true">📄</span> {state.file.name} — asocia cada campo con la columna correspondiente del archivo
               </p>
 
               {CAMPOS_SISTEMA.map((campo) => (
                 <div key={campo.key} style={{ display:"flex", alignItems:"center", gap:12,
                   padding:"8px 0", borderBottom:"0.5px solid #f0f0f0" }}>
-                  <span style={{ flex:1, fontSize:13, color:"#333", fontWeight:500 }}>{campo.label}</span>
+                  <label htmlFor={`campo-${campo.key}`} style={{ flex:1, fontSize:13, color:"#333", fontWeight:500 }}>
+                    {campo.label}
+                  </label>
                   <select
+                    id={`campo-${campo.key}`}
                     value={mapeo[campo.key] ?? ""}
+                    aria-describedby={mapeoError ? "mapeo-error" : undefined}
+                    aria-invalid={Boolean(mapeoError && !mapeo[campo.key])}
                     onChange={(e) => setMapeo((prev) => ({ ...prev, [campo.key]: e.target.value }))}
                     style={{ flex:1, border:"0.5px solid #e0e0e0", borderRadius:8, padding:"7px 10px",
                       fontSize:13, outline:"none", background:"#fff", boxSizing:"border-box" }}
@@ -224,9 +267,10 @@ export default function UploadExcel() {
               ))}
 
               {mapeoError && (
-                <div style={{ background:"#FAECE7", border:"0.5px solid #E24B4A", borderRadius:8,
+                <div id="mapeo-error" role="alert" aria-live="assertive"
+                  style={{ background:"#FAECE7", border:"0.5px solid #E24B4A", borderRadius:8,
                   padding:"10px 14px", fontSize:13, color:"#993C1D", marginTop:14 }}>
-                  ⚠️ {mapeoError}
+                  <span aria-hidden="true">⚠️</span> {mapeoError}
                 </div>
               )}
 
@@ -251,7 +295,7 @@ export default function UploadExcel() {
               {state.progress < 100 ? (
                 <>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                    <span style={{ fontSize:14, color:"#555" }}>📄 {state.file?.name}</span>
+                    <span style={{ fontSize:14, color:"#555" }}><span aria-hidden="true">📄</span> {state.file?.name}</span>
                     <span style={{ fontSize:14, fontWeight:500, color:"#534AB7" }}>{state.progress}%</span>
                   </div>
                   <div style={{ background:"#f0f0f0", borderRadius:99, height:8 }}>
@@ -267,10 +311,10 @@ export default function UploadExcel() {
 
           {/* Éxito */}
           {state.status === "success" && (
-            <div style={{ width:"100%", maxWidth:560, background:"#fff",
+            <div role="status" aria-live="polite" style={{ width:"100%", maxWidth:560, background:"#fff",
               border:"0.5px solid #e0e0e0", borderRadius:12, padding:"2rem",
               display:"flex", flexDirection:"column", alignItems:"center", gap:16 }}>
-              <span style={{ fontSize:52 }}>✅</span>
+              <span aria-hidden="true" style={{ fontSize:52 }}>✅</span>
               <p style={{ margin:0, fontSize:17, fontWeight:500, color:"#0F6E56" }}>
                 ¡Archivo cargado exitosamente!
               </p>

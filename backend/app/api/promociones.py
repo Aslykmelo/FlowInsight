@@ -83,6 +83,10 @@ def link_whatsapp_de(telefono: Optional[str], mensaje: str) -> Optional[str]:
 
 # ============================================================
 # LISTA DE CLIENTES CON SU CATEGORIA DE RECENCIA
+#
+# IMPORTANTE: se filtra por Cliente.autorizacion_datos == True,
+# para respetar la Ley 1581 de 2012. No quitar este filtro sin
+# agregar uno equivalente.
 # ============================================================
 
 @router.get("/clientes", response_model=list[ClientePromocion])
@@ -103,6 +107,7 @@ def listar_clientes_promocion(
     resultados = (
         db.query(Cliente, ultima_compra.c.ultima_fecha)
         .join(ultima_compra, ultima_compra.c.id_cliente == Cliente.id_cliente)
+        .filter(Cliente.autorizacion_datos == True)
         .all()
     )
 
@@ -129,6 +134,12 @@ def listar_clientes_promocion(
 
 # ============================================================
 # MENSAJE DE PROMOCION PARA UN CLIENTE ESPECIFICO
+#
+# IMPORTANTE: se verifica autorizacion_datos aunque el cliente
+# venga directo por id_cliente (no solo desde la lista ya
+# filtrada de arriba), porque este endpoint genera contacto
+# real (mensaje + link de WhatsApp), no solo una visualizacion
+# interna. Ley 1581 de 2012.
 # ============================================================
 
 @router.get("/mensaje/{id_cliente}", response_model=MensajePromocionOut)
@@ -140,6 +151,12 @@ def generar_mensaje_promocion(
     cliente = db.query(Cliente).filter(Cliente.id_cliente == id_cliente).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    if not cliente.autorizacion_datos:
+        raise HTTPException(
+            status_code=403,
+            detail="Este cliente no ha autorizado el uso de sus datos; no se puede generar un mensaje de promoción",
+        )
 
     ultima_fecha = (
         db.query(func.max(Pedido.fecha_pedido))

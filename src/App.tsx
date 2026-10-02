@@ -12,31 +12,34 @@ import SalesMap from "./pages/SalesMap";
 import OlapCube from "./pages/OlapCube";
 
 import ProtectedRoute from "./components/ProtectedRoute";
+import { TextSizeProvider } from "./context/TextSizeContext";
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* =========================
-            RUTA PÚBLICA
-        ========================== */}
-        <Route path="/" element={<Login />} />
+    <TextSizeProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* =========================
+              RUTA PÚBLICA
+          ========================== */}
+          <Route path="/" element={<Login />} />
 
-        {/* =========================
-            RUTAS PROTEGIDAS
-        ========================== */}
-        <Route element={<ProtectedRoute />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/upload" element={<UploadExcel />} />
-          <Route path="/predictions" element={<Predictions />} />
-          <Route path="/clients" element={<Clients />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/promotions" element={<Promotions />} />
-          <Route path="/sales-map" element={<SalesMap />} />
-          <Route path="/olap-cube" element={<OlapCube />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+          {/* =========================
+              RUTAS PROTEGIDAS
+          ========================== */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/upload" element={<UploadExcel />} />
+            <Route path="/predictions" element={<Predictions />} />
+            <Route path="/clients" element={<Clients />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/users" element={<Users />} />
+            <Route path="/promotions" element={<Promotions />} />
+            <Route path="/sales-map" element={<SalesMap />} />
+            <Route path="/olap-cube" element={<OlapCube />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </TextSizeProvider>
   );
 }

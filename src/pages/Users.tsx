@@ -346,7 +346,7 @@ export default function Users() {
   // ───────────────────────────────────────────
   if (loading) {
     return (
-      <div style={{ display: "flex", minHeight: "100vh", background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
+      <div className="app-shell" style={{ background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
         <Sidebar />
         <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", fontSize: 18, color: "#666" }}>
           Cargando usuarios...
@@ -360,7 +360,7 @@ export default function Users() {
   // ───────────────────────────────────────────
   if (error) {
     return (
-      <div style={{ display: "flex", minHeight: "100vh", background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
+      <div className="app-shell" style={{ background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
         <Sidebar />
         <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center",
           flexDirection: "column", gap: 10 }}>
@@ -376,7 +376,7 @@ export default function Users() {
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
+    <div className="app-shell" style={{ background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
       <Sidebar />
       {modalAbierto && (
         <UserModal
@@ -388,7 +388,7 @@ export default function Users() {
         />
       )}
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      <div className="app-main">
         <header style={{ background: "#fff", borderBottom: "0.5px solid #e0e0e0",
           padding: "0.875rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
@@ -413,8 +413,8 @@ export default function Users() {
               padding: "8px 12px", fontSize: 14, outline: "none", background: "#fff", boxSizing: "border-box" }}
           />
 
-          <div style={{ background: "#fff", border: "0.5px solid #e0e0e0", borderRadius: 12, overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <div className="table-scroll" style={{ background: "#fff", border: "0.5px solid #e0e0e0", borderRadius: 12 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
               <thead>
                 <tr style={{ background: "#f9f9f9", borderBottom: "0.5px solid #e0e0e0" }}>
                   {["Nombre", "Email", "Rol", "Estado", "Última sesión", ""].map((h) => (

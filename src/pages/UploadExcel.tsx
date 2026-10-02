@@ -158,11 +158,11 @@ export default function UploadExcel() {
   const enConfiguracionOSubida = state.status === "configurando" || state.status === "uploading";
 
   return (
-    <div style={{ display:"flex", minHeight:"100vh", background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+    <div className="app-shell" style={{ background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
       <Sidebar />
 
       {/* Main */}
-      <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
+      <div className="app-main">
         <header style={{ background:"#fff", borderBottom:"0.5px solid #e0e0e0",
           padding:"0.875rem 1.5rem", display:"flex", alignItems:"center", gap:12 }}>
           <div>

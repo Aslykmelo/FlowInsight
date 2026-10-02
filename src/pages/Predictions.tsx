@@ -139,7 +139,7 @@ function DetallePrediccion({ prediction, onClose }: { prediction: Prediction; on
           </ResponsiveContainer>
         </div>
 
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
+        <div className="grid-auto" style={{ marginBottom:16 }}>
           <div style={{ background:"#f5f5f7", borderRadius:12, padding:"0.75rem 1rem" }}>
             <p style={{ margin:"0 0 4px", fontSize:11, color:"#888" }}>Próxima compra estimada</p>
             <p style={{ margin:0, fontSize:16, fontWeight:500, color:"#534AB7" }}>{prediction.proximaCompra}</p>
@@ -282,7 +282,7 @@ export default function Predictions() {
   // ───────────────────────────────────────────
   if (loading) {
     return (
-      <div style={{ display:"flex", minHeight:"100vh", background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+      <div className="app-shell" style={{ background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
         <Sidebar />
         <div style={{ flex:1, display:"flex", justifyContent:"center", alignItems:"center", fontSize:18, color:"#666" }}>
           Cargando predicciones...
@@ -296,7 +296,7 @@ export default function Predictions() {
   // ───────────────────────────────────────────
   if (error) {
     return (
-      <div style={{ display:"flex", minHeight:"100vh", background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+      <div className="app-shell" style={{ background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
         <Sidebar />
         <div style={{ flex:1, display:"flex", justifyContent:"center", alignItems:"center",
           flexDirection:"column", gap:10 }}>
@@ -312,7 +312,7 @@ export default function Predictions() {
   }
 
   return (
-    <div style={{ display:"flex", minHeight:"100vh", background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+    <div className="app-shell" style={{ background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
       <Sidebar />
 
       <style>{`
@@ -329,7 +329,7 @@ export default function Predictions() {
         <DetallePrediccion prediction={seleccionado} onClose={() => setSeleccionado(null)} />
       )}
 
-      <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
+      <div className="app-main">
         {/* Header */}
         <header style={{ background:"#fff", borderBottom:"0.5px solid #e0e0e0",
           padding:"0.875rem 1.5rem", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -394,7 +394,7 @@ export default function Predictions() {
           )}
 
           {/* Resumen riesgo */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:12 }}>
+          <div className="grid-auto">
             {(["bajo","medio","alto"] as const).map(r => {
               const s = RIESGO_STYLE[r];
               const activo = filtro === r;
@@ -485,8 +485,8 @@ export default function Predictions() {
           </div>
 
           {/* Tabla */}
-          <div ref={tablaRef} style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, overflow:"hidden" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+          <div ref={tablaRef} className="table-scroll" style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, minWidth:760 }}>
               <thead>
                 <tr style={{ background:"#f9f9f9", borderBottom:"0.5px solid #e0e0e0" }}>
                   {["ID","Cliente","Ciudad","Última compra","Intervalo (días)","Próxima compra","Probabilidad retención","Riesgo"].map(h => (

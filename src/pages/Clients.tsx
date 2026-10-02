@@ -246,7 +246,7 @@ export default function Clients() {
   // ───────────────────────────────────────────
   if (loading) {
     return (
-      <div style={{ display:"flex", minHeight:"100vh", background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+      <div className="app-shell" style={{ background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
         <Sidebar />
         <div style={{ flex:1, display:"flex", justifyContent:"center", alignItems:"center", fontSize:18, color:"#666" }}>
           Cargando clientes...
@@ -260,7 +260,7 @@ export default function Clients() {
   // ───────────────────────────────────────────
   if (error) {
     return (
-      <div style={{ display:"flex", minHeight:"100vh", background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+      <div className="app-shell" style={{ background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
         <Sidebar />
         <div style={{ flex:1, display:"flex", justifyContent:"center", alignItems:"center",
           flexDirection:"column", gap:10 }}>
@@ -276,11 +276,11 @@ export default function Clients() {
   }
 
   return (
-    <div style={{ display:"flex", minHeight:"100vh", background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+    <div className="app-shell" style={{ background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
       <Sidebar />
       {selected && <ClientModal client={selected} onClose={() => setSelected(null)} />}
 
-      <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
+      <div className="app-main">
         <header style={{ background:"#fff", borderBottom:"0.5px solid #e0e0e0",
           padding:"0.875rem 1.5rem", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
@@ -298,7 +298,7 @@ export default function Clients() {
         <main style={{ padding:"1.5rem", display:"flex", flexDirection:"column", gap:"1.25rem" }}>
 
           {/* Resumen estados */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+          <div className="grid-auto">
             {[
               { key:"activo",    label:"Activos",      count: conteo.activo,   color:"#0F6E56", bg:"#E1F5EE" },
               { key:"en riesgo", label:"En riesgo",    count: conteo.enRiesgo, color:"#BA7517", bg:"#FAEEDA" },
@@ -406,8 +406,8 @@ export default function Clients() {
               />
             </div>
           ) : (
-          <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, overflow:"hidden" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+          <div className="table-scroll" style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, minWidth:720 }}>
               <thead>
                 <tr style={{ background:"#f9f9f9", borderBottom:"0.5px solid #e0e0e0" }}>
                   {["Cliente","Ciudad","Pedidos","Monto total","Última compra","Intervalo","Estado",""].map(h => (

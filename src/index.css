@@ -12,14 +12,22 @@ body {
 
 .app-shell {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden; /* el sidebar queda fijo; solo .app-main se desplaza */
 }
 
 .app-main {
   flex: 1;
   min-width: 0; /* evita que tablas/grids anchos empujen el layout */
+  min-height: 0; /* necesario para que overflow-y:auto funcione dentro de flex */
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+}
+
+.sidebar {
+  height: 100vh;
+  overflow-y: auto; /* por si el menu crece mas que la pantalla */
 }
 
 .sidebar-toggle {
@@ -51,8 +59,18 @@ body {
 }
 
 @media (max-width: 860px) {
+  /* En movil el sidebar es un cajon superpuesto (position:fixed), no
+     compite por espacio en el layout, asi que aqui se vuelve al scroll
+     normal de pagina completa en vez del scroll interno de escritorio. */
   .app-shell {
     display: block;
+    height: auto;
+    overflow: visible;
+  }
+
+  .app-main {
+    overflow-y: visible;
+    min-height: 0;
   }
 
   .sidebar {

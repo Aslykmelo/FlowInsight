@@ -12,6 +12,8 @@ from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
+LIMITE_BYTES = 10 * 1024 * 1024  # el mismo maximo que anuncia la pantalla de carga
+
 
 COLUMNAS_REQUERIDAS = {
     "cliente_nombre",
@@ -67,6 +69,15 @@ async def cargar_excel(
         raise HTTPException(
             status_code=400,
             detail="Solo se aceptan archivos .xlsx o .xls",
+        )
+
+    file.file.seek(0, 2)
+    tamano = file.file.tell()
+    file.file.seek(0)
+    if tamano > LIMITE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="El archivo supera el máximo de 10 MB",
         )
 
     try:

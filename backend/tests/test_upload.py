@@ -83,3 +83,10 @@ def test_upload_detecta_duplicado_entre_cargas_distintas(client, headers_admin):
     assert primera["pedidos_creados"] == 1
     assert segunda["pedidos_creados"] == 0
     assert segunda["filas_duplicadas"] == 1
+
+
+def test_upload_rechaza_archivos_de_mas_de_10_mb(client, headers_admin):
+    contenido = b"0" * (10 * 1024 * 1024 + 1)
+    res = _subir(client, headers_admin, contenido)
+    assert res.status_code == 413
+    assert "10 MB" in res.json()["detail"]

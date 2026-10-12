@@ -4,9 +4,9 @@ from app.core.security import hash_password
 
 db = SessionLocal()
 
-rol = db.query(Rol).filter(Rol.nombre_rol == "Ventas").first()
+rol = db.query(Rol).filter(Rol.nombre_rol == "Analista").first()
 if not rol:
-    rol = Rol(nombre_rol="Ventas")
+    rol = Rol(nombre_rol="Analista")
     db.add(rol)
     db.commit()
     db.refresh(rol)

@@ -1,8 +1,9 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, type CSSProperties } from "react";
 import { useTextSize } from "../context/TextSizeContext";
+import { useAuth } from "../context/AuthContext";
 
-const NAV = [
+const NAV: { emoji: string; label: string; path: string; soloAdmin?: boolean }[] = [
   { emoji:"📊", label:"Dashboard",    path:"/dashboard"    },
   { emoji:"📁", label:"Cargar Excel", path:"/upload"       },
   { emoji:"🤖", label:"Predicciones", path:"/predictions"  },
@@ -11,8 +12,18 @@ const NAV = [
   { emoji:"🎯", label:"Promociones",  path:"/promotions"   },
   { emoji:"🗺️", label:"Mapa Bogotá",  path:"/sales-map"    },
   { emoji:"📦", label:"Cubo OLAP 3D", path:"/olap-cube"    },
-  { emoji:"⚙️", label:"Usuarios",     path:"/users"        },
+  { emoji:"🧠", label:"Cómo funciona", path:"/model"       },
+  { emoji:"⚙️", label:"Usuarios",     path:"/users", soloAdmin:true },
+  { emoji:"👤", label:"Mi perfil",    path:"/profile"      },
 ];
+
+const iniciales = (nombre: string) =>
+  nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((parte) => parte[0].toUpperCase())
+    .join("") || "?";
 
 // Oculta el emoji decorativo al lector de pantalla y deja que el
 // texto visible de al lado sea lo único que se anuncie.
@@ -64,6 +75,12 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [abierto, setAbierto] = useState(false);
+  const { usuario, esAdmin, cerrarSesion } = useAuth();
+
+  const salir = () => {
+    cerrarSesion();
+    navigate("/", { replace: true });
+  };
 
   const irA = (path: string) => {
     navigate(path);
@@ -99,7 +116,7 @@ export default function Sidebar() {
           <p style={{ margin:"4px 0 0", fontSize:11, color:"#8888aa" }}>W&T Food S.A.S</p>
         </div>
         <nav style={{ flex:1, overflowY:"auto" }}>
-          {NAV.map(item => {
+          {NAV.filter(item => !item.soloAdmin || esAdmin).map(item => {
             const active = location.pathname === item.path;
             return (
               <button key={item.label}
@@ -123,10 +140,27 @@ export default function Sidebar() {
         <TextSizeControl />
 
         <div style={{ padding:"1rem 1.25rem", borderTop:"0.5px solid #2a2a4a",
-          display:"flex", alignItems:"center", gap:10 }}>
-          <div role="img" aria-label="Usuario administrador" style={{ width:34, height:34, borderRadius:"50%", background:"#534AB7",
-            display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:12, color:"#fff", fontWeight:500, flexShrink:0 }}>AD</div>
+          display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div aria-hidden="true" style={{ width:34, height:34, borderRadius:"50%", background:"#534AB7",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:12, color:"#fff", fontWeight:500, flexShrink:0 }}>
+              {iniciales(usuario?.nombre_usuario ?? "")}
+            </div>
+            <div style={{ minWidth:0 }}>
+              <p style={{ margin:0, fontSize:13, color:"#fff", overflow:"hidden",
+                textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                {usuario?.nombre_usuario ?? "Usuario"}
+              </p>
+              <p style={{ margin:0, fontSize:11, color:"#8888aa" }}>{usuario?.rol ?? ""}</p>
+            </div>
+          </div>
+          <button type="button" onClick={salir}
+            style={{ width:"100%", background:"rgba(255,255,255,0.05)", color:"#ccc",
+              border:"0.5px solid #2a2a4a", borderRadius:6, padding:"6px 0",
+              cursor:"pointer", fontSize:12 }}>
+            Cerrar sesión
+          </button>
         </div>
       </aside>
     </>

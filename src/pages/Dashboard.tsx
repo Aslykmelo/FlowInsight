@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Sidebar from "../components/Sidebar";
+import { useAuth } from "../context/AuthContext";
 
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area,
@@ -212,6 +213,7 @@ function filtrarPorPeriodo(ventas: ApiSale[], periodo: Periodo): ApiSale[] {
 // ============================================================
 
 export default function Dashboard() {
+  const { usuario } = useAuth();
   const [activeTab, setActiveTab] = useState<"ventas" | "clientes">("ventas");
   const [periodo, setPeriodo] = useState<Periodo>("anio");
 
@@ -385,7 +387,9 @@ export default function Dashboard() {
         <header style={{ background:"#fff", borderBottom:"0.5px solid #e0e0e0",
           padding:"0.875rem 1.5rem", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
           <div>
-            <h1 style={{ margin:0, fontSize:20, fontWeight:500 }}>Dashboard</h1>
+            <h1 style={{ margin:0, fontSize:20, fontWeight:500 }}>
+              {usuario ? `Bienvenido, ${usuario.nombre_usuario.split(" ")[0]}` : "Dashboard"}
+            </h1>
             <p style={{ margin:0, fontSize:13, color:"#888" }}>
               {new Date().toLocaleDateString("es-CO", { dateStyle:"long" })}
             </p>

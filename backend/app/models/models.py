@@ -22,8 +22,12 @@ class Usuario(Base):
     nombre_usuario = Column(String(100), nullable=False)
     contrasena = Column(String(255), nullable=False)
     correo = Column(String(150), unique=True, nullable=False)
-    estado = Column(String(20), default="activo")      
-    ultima_sesion = Column(DateTime, nullable=True)      
+    estado = Column(String(20), default="activo")
+    ultima_sesion = Column(DateTime, nullable=True)
+    telefono = Column(String(20), nullable=True)
+    codigo_recuperacion_hash = Column(String(255), nullable=True)
+    codigo_recuperacion_expira = Column(DateTime, nullable=True)
+    codigo_recuperacion_intentos = Column(Integer, nullable=False, default=0, server_default="0")
 
     rol = relationship("Rol", back_populates="usuarios")
 

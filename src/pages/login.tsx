@@ -1,9 +1,30 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import axios, { AxiosError } from "axios";
+import { useAuth } from "../context/AuthContext";
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  border: "0.5px solid #d0d0d0",
+  borderRadius: 8,
+  padding: "11px 12px",
+  fontSize: 14,
+  outline: "none",
+  boxSizing: "border-box",
+  background: "#fff",
+};
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 13,
+  fontWeight: 500,
+  color: "#444",
+  marginBottom: 6,
+};
 
 export default function Login() {
   const navigate = useNavigate();
+  const { recargar } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -11,8 +32,9 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
 
-  const handleLogin = async () => {
-    // Validar campos
+  const handleLogin = async (e: FormEvent) => {
+    e.preventDefault();
+
     if (!email || !password) {
       setError("Por favor completa todos los campos.");
       return;
@@ -22,39 +44,25 @@ export default function Login() {
     setError("");
 
     try {
-      // FastAPI OAuth2PasswordRequestForm espera:
-      // username y password como x-www-form-urlencoded
+      // FastAPI OAuth2PasswordRequestForm espera x-www-form-urlencoded
       const formData = new URLSearchParams();
-
       formData.append("username", email);
       formData.append("password", password);
 
-      // Enviar credenciales al backend
-      const response = await axios.post(
-        "http://localhost:8000/auth/login",
-        formData,
-        {
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-        }
-      );
+      const response = await axios.post("http://localhost:8000/auth/login", formData, {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      });
 
-      // Obtener token JWT
-      const token = response.data.access_token;
-
-      // Guardar token
-      localStorage.setItem("token", token);
-
-      // Redirigir al dashboard
+      localStorage.setItem("token", response.data.access_token);
+      await recargar();
       navigate("/dashboard");
-    } catch (error) {
-      console.error("Error de login:", error);
-
-      const axiosError = error as AxiosError;
+    } catch (err) {
+      const axiosError = err as AxiosError;
 
       if (axiosError.response?.status === 401) {
         setError("Correo o contraseña incorrectos.");
+      } else if (axiosError.response?.status === 403) {
+        setError("Tu usuario está inactivo. Contacta a un administrador.");
       } else if (axiosError.response?.status === 422) {
         setError("Los datos enviados no son válidos.");
       } else {
@@ -67,340 +75,74 @@ export default function Login() {
 
   return (
     <div
-      className="login-shell"
       style={{
+        minHeight: "100vh",
+        background: "#fff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "1.5rem",
         fontFamily: "system-ui, sans-serif",
       }}
     >
-      {/* =========================
-          PANEL IZQUIERDO
-      ========================== */}
-      <div
-        className="login-visual"
-        style={{
-          background:
-            "linear-gradient(135deg, #16163a 0%, #2d2b6b 50%, #1a3a5c 100%)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "3rem",
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
-        {/* Decoración */}
-        <div
-          style={{
-            position: "absolute",
-            width: 350,
-            height: 350,
-            borderRadius: "50%",
-            border: "1px solid rgba(255,255,255,0.06)",
-            top: -80,
-            left: -80,
-          }}
-        />
-
-        <div
-          style={{
-            position: "absolute",
-            width: 250,
-            height: 250,
-            borderRadius: "50%",
-            border: "1px solid rgba(255,255,255,0.06)",
-            bottom: 40,
-            right: -60,
-          }}
-        />
-
-        <div
-          style={{
-            position: "absolute",
-            width: 180,
-            height: 180,
-            borderRadius: "50%",
-            background: "rgba(83,74,183,0.15)",
-            top: "40%",
-            left: "60%",
-          }}
-        />
-
-        {/* Contenido */}
-        <div
-          style={{
-            position: "relative",
-            zIndex: 1,
-            textAlign: "center",
-            color: "#fff",
-          }}
-        >
-          <p
-            aria-hidden="true"
-            style={{
-              margin: "0 0 16px",
-              fontSize: 52,
-            }}
-          >
-            🔮
-          </p>
-
-          <h1
-            style={{
-              margin: "0 0 8px",
-              fontSize: 32,
-              fontWeight: 600,
-              letterSpacing: "-0.5px",
-            }}
-          >
+      <div style={{ width: "100%", maxWidth: 380 }}>
+        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+          <p aria-hidden="true" style={{ margin: 0, fontSize: 44 }}>🔮</p>
+          <p style={{ margin: "4px 0 0", fontSize: 26, fontWeight: 600, color: "#16163a" }}>
             FlowInsight
-          </h1>
-
-          <p
-            style={{
-              margin: "0 0 2.5rem",
-              fontSize: 15,
-              color: "rgba(255,255,255,0.6)",
-            }}
-          >
-            W&T Food S.A.S
           </p>
-
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-              textAlign: "left",
-            }}
-          >
-            {[
-              {
-                emoji: "📊",
-                title: "Dashboard en tiempo real",
-                desc: "KPIs y métricas actualizadas automáticamente",
-              },
-              {
-                emoji: "🤖",
-                title: "Predicciones con ML",
-                desc: "Anticipa el comportamiento de tus clientes",
-              },
-              {
-                emoji: "📁",
-                title: "Carga de datos Excel",
-                desc: "Procesamiento ETL rápido y sin errores",
-              },
-            ].map((feature) => (
-              <div
-                key={feature.title}
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 14,
-                  background: "rgba(255,255,255,0.06)",
-                  borderRadius: 12,
-                  padding: "12px 16px",
-                }}
-              >
-                <span
-                  aria-hidden="true"
-                  style={{
-                    fontSize: 22,
-                    flexShrink: 0,
-                  }}
-                >
-                  {feature.emoji}
-                </span>
-
-                <div>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 14,
-                      fontWeight: 500,
-                    }}
-                  >
-                    {feature.title}
-                  </p>
-
-                  <p
-                    style={{
-                      margin: "2px 0 0",
-                      fontSize: 12,
-                      color: "rgba(255,255,255,0.5)",
-                    }}
-                  >
-                    {feature.desc}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#888" }}>W&amp;T Food S.A.S</p>
         </div>
-      </div>
 
-      {/* =========================
-          PANEL DERECHO
-      ========================== */}
-      <div
-        className="login-form-panel"
-        style={{
-          background: "#fff",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "3rem 2.5rem",
-        }}
-      >
-        <div
-          style={{
-            width: "100%",
-          }}
-        >
-          <h2
-            style={{
-              margin: "0 0 6px",
-              fontSize: 24,
-              fontWeight: 600,
-              color: "#1a1a2e",
-            }}
-          >
+        <form onSubmit={handleLogin} noValidate>
+          <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 500, color: "#16163a" }}>
             Bienvenido de nuevo
-          </h2>
-
-          <p
-            style={{
-              margin: "0 0 2rem",
-              fontSize: 14,
-              color: "#888",
-            }}
-          >
+          </h1>
+          <p style={{ margin: "0 0 1.5rem", fontSize: 14, color: "#888" }}>
             Inicia sesión para acceder al sistema
           </p>
 
-          {/* =========================
-              EMAIL
-          ========================== */}
-          <div
-            style={{
-              marginBottom: 16,
-            }}
-          >
-            <label
-              htmlFor="login-email"
-              style={{
-                display: "block",
-                fontSize: 13,
-                fontWeight: 500,
-                color: "#555",
-                marginBottom: 6,
-              }}
-            >
-              Correo electrónico
-            </label>
-
+          <div style={{ marginBottom: 16 }}>
+            <label htmlFor="login-email" style={labelStyle}>Correo electrónico</label>
             <input
               id="login-email"
               type="email"
-              placeholder="asly@flowinsight.com"
+              autoComplete="username"
               value={email}
-              aria-invalid={Boolean(error && !email)}
-              aria-describedby={error ? "login-error" : undefined}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setError("");
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleLogin();
-                }
-              }}
-              style={{
-                width: "100%",
-                border: "0.5px solid #e0e0e0",
-                borderRadius: 8,
-                padding: "11px 14px",
-                fontSize: 14,
-                outline: "none",
-                boxSizing: "border-box",
-                borderColor:
-                  error && !email ? "#E24B4A" : "#e0e0e0",
-              }}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="correo@empresa.com"
+              style={inputStyle}
             />
           </div>
 
-          {/* =========================
-              CONTRASEÑA
-          ========================== */}
-          <div
-            style={{
-              marginBottom: error ? 12 : 20,
-            }}
-          >
-            <label
-              htmlFor="login-password"
-              style={{
-                display: "block",
-                fontSize: 13,
-                fontWeight: 500,
-                color: "#555",
-                marginBottom: 6,
-              }}
-            >
-              Contraseña
-            </label>
-
-            <div
-              style={{
-                position: "relative",
-              }}
-            >
+          <div style={{ marginBottom: 8 }}>
+            <label htmlFor="login-password" style={labelStyle}>Contraseña</label>
+            <div style={{ position: "relative" }}>
               <input
                 id="login-password"
                 type={showPass ? "text" : "password"}
-                placeholder="••••••••"
+                autoComplete="current-password"
                 value={password}
-                aria-invalid={Boolean(error && !password)}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
                 aria-describedby={error ? "login-error" : undefined}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setError("");
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleLogin();
-                  }
-                }}
-                style={{
-                  width: "100%",
-                  border: "0.5px solid #e0e0e0",
-                  borderRadius: 8,
-                  padding: "11px 40px 11px 14px",
-                  fontSize: 14,
-                  outline: "none",
-                  boxSizing: "border-box",
-                  borderColor:
-                    error && !password ? "#E24B4A" : "#e0e0e0",
-                }}
+                style={{ ...inputStyle, paddingRight: 44 }}
               />
-
               <button
                 type="button"
-                onClick={() => setShowPass(!showPass)}
+                onClick={() => setShowPass((v) => !v)}
                 aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
                 aria-pressed={showPass}
                 style={{
                   position: "absolute",
-                  right: 12,
+                  right: 6,
                   top: "50%",
                   transform: "translateY(-50%)",
                   background: "transparent",
                   border: "none",
                   cursor: "pointer",
                   fontSize: 16,
-                  color: "#aaa",
-                  padding: 0,
+                  padding: 6,
                 }}
               >
                 <span aria-hidden="true">{showPass ? "🙈" : "👁️"}</span>
@@ -408,14 +150,16 @@ export default function Login() {
             </div>
           </div>
 
-          {/* =========================
-              MENSAJE DE ERROR
-          ========================== */}
+          <div style={{ textAlign: "right", marginBottom: 20 }}>
+            <Link to="/forgot-password" style={{ fontSize: 13, color: "#534AB7" }}>
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </div>
+
           {error && (
             <div
               id="login-error"
               role="alert"
-              aria-live="assertive"
               style={{
                 background: "#FAECE7",
                 border: "0.5px solid #E24B4A",
@@ -426,150 +170,53 @@ export default function Login() {
                 marginBottom: 16,
               }}
             >
-              <span aria-hidden="true">⚠️</span> {error}
+              {error}
             </div>
           )}
 
-          {/* =========================
-              BOTÓN LOGIN
-          ========================== */}
           <button
-            type="button"
-            onClick={handleLogin}
+            type="submit"
             disabled={loading}
-            aria-busy={loading}
             style={{
               width: "100%",
-              background: loading ? "#767676" : "#534AB7",
+              background: "#534AB7",
               color: "#fff",
               border: "none",
               borderRadius: 8,
               padding: "12px",
-              cursor: loading ? "not-allowed" : "pointer",
               fontSize: 15,
               fontWeight: 500,
+              cursor: loading ? "default" : "pointer",
+              opacity: loading ? 0.7 : 1,
             }}
           >
             {loading ? "Iniciando sesión..." : "Iniciar sesión →"}
           </button>
+        </form>
 
-          {import.meta.env.DEV && (<>
-          {/* =========================
-              DIVISOR
-          ========================== */}
+        {import.meta.env.DEV && (
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              margin: "1.5rem 0",
-            }}
-          >
-            <div
-              style={{
-                flex: 1,
-                height: "0.5px",
-                background: "#e0e0e0",
-              }}
-            />
-
-            <span
-              style={{
-                fontSize: 12,
-                color: "#bbb",
-              }}
-            >
-              credenciales de prueba
-            </span>
-
-            <div
-              style={{
-                flex: 1,
-                height: "0.5px",
-                background: "#e0e0e0",
-              }}
-            />
-          </div>
-
-          {/* =========================
-              CREDENCIALES DEMO
-          ========================== */}
-          <div
-            style={{
+              marginTop: "1.5rem",
               background: "#f9f9f9",
               border: "0.5px solid #e0e0e0",
               borderRadius: 8,
-              padding: "12px 14px",
+              padding: "10px 14px",
+              fontSize: 12,
+              color: "#888",
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: 13,
-                marginBottom: 6,
-              }}
-            >
-              <span
-                style={{
-                  color: "#888",
-                }}
-              >
-                Email
-              </span>
-
-              <span
-                style={{
-                  fontWeight: 500,
-                  color: "#534AB7",
-                }}
-              >
-                asly@flowinsight.com
-              </span>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: 13,
-              }}
-            >
-              <span
-                style={{
-                  color: "#888",
-                }}
-              >
-                Contraseña
-              </span>
-
-              <span
-                style={{
-                  fontWeight: 500,
-                  color: "#534AB7",
-                }}
-              >
-                admin123
-              </span>
-            </div>
+            <p style={{ margin: "0 0 4px", fontWeight: 500 }}>credenciales de prueba</p>
+            <p style={{ margin: 0 }}>
+              asly@flowinsight.com · <span style={{ color: "#534AB7" }}>admin123</span>
+            </p>
           </div>
-          </>)}
-        </div>
+        )}
 
-        {/* =========================
-            PIE
-        ========================== */}
-        <p
-          style={{
-            marginTop: "2rem",
-            fontSize: 12,
-            color: "#ccc",
-          }}
-        >
+        <p style={{ marginTop: "2rem", fontSize: 12, color: "#bbb", textAlign: "center" }}>
           FlowInsight v1.0 — Proyecto de grado UMB
         </p>
       </div>
     </div>
   );
 }
-

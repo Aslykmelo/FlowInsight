@@ -9,6 +9,7 @@ interface User {
   rol: "Administrador" | "Analista";
   estado: "activo" | "inactivo";
   ultimaSesion: string;
+  telefono: string;
 }
 
 interface ApiUsuario {
@@ -18,6 +19,7 @@ interface ApiUsuario {
   rol: string;
   estado: string;
   ultima_sesion: string | null;
+  telefono: string | null;
 }
 
 interface UserFormData {
@@ -25,6 +27,7 @@ interface UserFormData {
   email: string;
   rol: User["rol"];
   password: string;
+  telefono: string;
 }
 
 const API_URL = "http://127.0.0.1:8000";
@@ -66,6 +69,7 @@ function UserModal({
   const [email, setEmail] = useState(user?.email ?? "");
   const [rol, setRol] = useState<User["rol"]>(user?.rol ?? "Analista");
   const [password, setPassword] = useState("");
+  const [telefono, setTelefono] = useState(user?.telefono ?? "");
   const [error, setError] = useState("");
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -88,7 +92,7 @@ function UserModal({
       return;
     }
     setError("");
-    onSave({ nombre: nombre.trim(), email: email.trim(), rol, password });
+    onSave({ nombre: nombre.trim(), email: email.trim(), rol, password, telefono: telefono.trim() });
   };
 
   const mensajeError = error || errorExterno;
@@ -132,6 +136,12 @@ function UserModal({
           <label htmlFor="user-email" style={labelStyle}>Correo electrónico</label>
           <input id="user-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
             placeholder="usuario@flowinsight.com" style={inputStyle} />
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <label htmlFor="user-telefono" style={labelStyle}>Teléfono celular (para recuperar la contraseña)</label>
+          <input id="user-telefono" inputMode="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)}
+            placeholder="3001234567" style={inputStyle} />
         </div>
 
         <div style={{ marginBottom: 14 }}>
@@ -226,6 +236,7 @@ export default function Users() {
         rol: rolValido(u.rol),
         estado: u.estado === "inactivo" ? "inactivo" : "activo",
         ultimaSesion: formatoFechaHora(u.ultima_sesion),
+        telefono: u.telefono ?? "",
       }));
 
       setUsers(usuariosFormateados);
@@ -279,8 +290,8 @@ export default function Users() {
         : `${API_URL}/users`;
 
       const body = esEdicion
-        ? { nombre: data.nombre, email: data.email, rol: data.rol, password: data.password || null }
-        : { nombre: data.nombre, email: data.email, rol: data.rol, password: data.password };
+        ? { nombre: data.nombre, email: data.email, rol: data.rol, password: data.password || null, telefono: data.telefono || null }
+        : { nombre: data.nombre, email: data.email, rol: data.rol, password: data.password, telefono: data.telefono || null };
 
       const response = await fetch(url, {
         method: esEdicion ? "PUT" : "POST",
@@ -414,10 +425,10 @@ export default function Users() {
           />
 
           <div className="table-scroll" style={{ background: "#fff", border: "0.5px solid #e0e0e0", borderRadius: 12 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 760 }}>
               <thead>
                 <tr style={{ background: "#f9f9f9", borderBottom: "0.5px solid #e0e0e0" }}>
-                  {["Nombre", "Email", "Rol", "Estado", "Última sesión", ""].map((h) => (
+                  {["Nombre", "Email", "Teléfono", "Rol", "Estado", "Última sesión", ""].map((h) => (
                     <th key={h} style={{ padding: "10px 16px", textAlign: "left",
                       fontWeight: 500, color: "#666", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
@@ -425,7 +436,7 @@ export default function Users() {
               </thead>
               <tbody>
                 {datos.length === 0 ? (
-                  <tr><td colSpan={6} style={{ padding: "2rem", textAlign: "center", color: "#aaa" }}>
+                  <tr><td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "#aaa" }}>
                     No se encontraron usuarios
                   </td></tr>
                 ) : datos.map((u, i) => {
@@ -435,6 +446,7 @@ export default function Users() {
                       background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
                       <td style={{ padding: "12px 16px", fontWeight: 500 }}>{u.nombre}</td>
                       <td style={{ padding: "12px 16px", color: "#555" }}>{u.email}</td>
+                      <td style={{ padding: "12px 16px", color: "#555" }}>{u.telefono || "—"}</td>
                       <td style={{ padding: "12px 16px" }}>
                         <span style={{ fontSize: 12, color: "#534AB7", background: "#EEEDFE",
                           padding: "3px 10px", borderRadius: 6, fontWeight: 500 }}>

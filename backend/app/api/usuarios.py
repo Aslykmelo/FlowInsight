@@ -5,6 +5,7 @@ from app.db.session import get_db
 from app.models.models import Usuario, Rol
 from app.schemas.usuarios import UsuarioCreate, UsuarioUpdate, EstadoUpdate, UsuarioOut
 from app.core.security import hash_password
+from app.core.telefono import normalizar_telefono
 from app.core.dependencies import get_current_user, require_admin
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -18,7 +19,17 @@ def _a_usuario_out(usuario: Usuario) -> dict:
         "rol": usuario.rol.nombre_rol if usuario.rol else "—",
         "estado": usuario.estado or "activo",
         "ultima_sesion": usuario.ultima_sesion,
+        "telefono": usuario.telefono,
     }
+
+
+def _telefono_normalizado(valor: str | None) -> str | None:
+    if valor is None or valor.strip() == "":
+        return None
+    try:
+        return normalizar_telefono(valor)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 def _buscar_rol(db: Session, nombre_rol: str) -> Rol:
@@ -55,6 +66,7 @@ def crear_usuario(
         contrasena=hash_password(datos.password),
         id_rol=rol.id_rol,
         estado="activo",
+        telefono=_telefono_normalizado(datos.telefono),
     )
 
     db.add(nuevo)
@@ -80,6 +92,7 @@ def actualizar_usuario(
     usuario.nombre_usuario = datos.nombre
     usuario.correo = datos.email
     usuario.id_rol = rol.id_rol
+    usuario.telefono = _telefono_normalizado(datos.telefono)
 
     if datos.password:
         usuario.contrasena = hash_password(datos.password)

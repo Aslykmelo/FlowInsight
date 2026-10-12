@@ -9,9 +9,9 @@ Centraliza los pedidos y clientes que hoy se manejan en archivos Excel, calcula 
 | Módulo | Estado |
 |---|---|
 | Frontend (React + Vite + TS) | Funcional: dashboard, carga de Excel, predicciones, clientes, reportes, promociones, mapa de Bogotá, cubo OLAP 3D, usuarios; diseño responsivo |
-| Backend (FastAPI + PostgreSQL) | Funcional: autenticación JWT con roles, ETL de Excel con deduplicación, dashboard, reportes Excel/PDF, promociones, OLAP, predicciones |
+| Backend (FastAPI + PostgreSQL) | Funcional: autenticación JWT con roles (Administrador / Analista), recuperación de contraseña por SMS, perfil de usuario, ETL de Excel con deduplicación, dashboard, reportes Excel/PDF, promociones, OLAP, predicciones |
 | Modelo de IA | Entrenado y conectado al backend. Resultado sobre el dataset sintético: R² = 0.23 (meta 0.75) y F1 = 0.30 (meta 0.78); ver limitación abajo |
-| Pruebas | 36 pruebas automatizadas (pytest), 79 % de cobertura del backend |
+| Pruebas | 54 pruebas automatizadas (pytest), 81 % de cobertura del backend |
 | Despliegue | Solo entorno local de prueba; sin despliegue en producción |
 
 ### Limitaciones conocidas
@@ -21,6 +21,8 @@ Centraliza los pedidos y clientes que hoy se manejan en archivos Excel, calcula 
 - No hay alertas automáticas ni reentrenamiento periódico del modelo (el reentrenamiento es manual con `train_model.py`).
 - No hay registro de logs de auditoría ni cifrado de datos de clientes a nivel de aplicación.
 - El CORS del backend solo admite `http://localhost:<puerto>`.
+- La recuperación de contraseña envía SMS reales solo si se configura un proveedor (Twilio, variables `TWILIO_*`); por defecto el código se escribe en el log del servidor. El envío real no se ha verificado contra el proveedor.
+- La recuperación de contraseña limita los intentos por cuenta (5 por código, un código nuevo por minuto), pero no limita por dirección IP.
 
 ## Stack
 
@@ -64,6 +66,8 @@ python generate_dataset.py      # dataset sintético (400 clientes)
 python train_model.py           # entrena y guarda los modelos
 uvicorn app.main:app --reload   # API en http://localhost:8000
 ```
+
+Para probar la recuperación de contraseña: asigne un teléfono al usuario (módulo Usuarios o Mi perfil), use "¿Olvidaste tu contraseña?" en el login y copie el código desde la consola de uvicorn (modo `SMS_PROVIDER=consola`).
 
 Las contraseñas de los usuarios de prueba están en `create_admin.py` y `create_ventas_user.py`; cámbielas antes de cualquier uso fuera de desarrollo.
 

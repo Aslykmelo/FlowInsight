@@ -17,3 +17,19 @@ class PrediccionOut(BaseModel):
     riesgo: str
     probabilidad: int
     historial: list[CompraHistoricaOut]
+
+class ModeloInfoOut(BaseModel):
+    version: str
+    fecha_entrenamiento: str | None
+    r2: float | None
+    umbral_r2: float
+    f1: float | None
+    umbral_f1: float
+    precision: float | None
+    recall: float | None
+    snapshots_total: int | None
+    snapshots_entrenamiento: int | None
+    snapshots_prueba: int | None
+    variables: list[str]
+    clientes_con_prediccion: int
+    notas: str | None

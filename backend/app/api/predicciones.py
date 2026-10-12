@@ -1,18 +1,73 @@
 from datetime import datetime, timedelta
 from collections import defaultdict
+import re
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.models import Cliente, Pedido, Usuario, PrediccionCliente, ModeloPrediccion
-from app.schemas.predicciones import PrediccionOut, CompraHistoricaOut
+from app.schemas.predicciones import PrediccionOut, CompraHistoricaOut, ModeloInfoOut
 from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/predicciones", tags=["predicciones"])
 
 MESES_ABBR = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 VENTANA_MODELO_DIAS = 90
+UMBRAL_R2 = 0.75
+UMBRAL_F1 = 0.78
+
+
+def _numero(patron: str, texto: str) -> float | None:
+    m = re.search(patron, texto)
+    return float(m.group(1)) if m else None
+
+
+@router.get("/modelo", response_model=ModeloInfoOut)
+def informacion_del_modelo(
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_current_user),
+):
+    """Ficha del ultimo modelo entrenado. Las metricas se leen de las notas que
+    guarda train_model.py al registrar cada version, no son valores fijos."""
+    modelo = (
+        db.query(ModeloPrediccion)
+        .order_by(ModeloPrediccion.id_modelo.desc())
+        .first()
+    )
+    if not modelo:
+        raise HTTPException(status_code=404, detail="Aún no hay un modelo entrenado")
+
+    notas = modelo.notas or ""
+    variables_txt = re.search(r"Variables: ([^.]+)\.", notas)
+    variables = [v.strip() for v in variables_txt.group(1).split(",")] if variables_txt else []
+    reparto = re.search(r"\((\d+) train / (\d+) test", notas)
+    total = _numero(r"sobre (\d+) snapshots", notas)
+
+    con_prediccion = (
+        db.query(PrediccionCliente)
+        .filter(PrediccionCliente.id_modelo == modelo.id_modelo)
+        .count()
+    )
+
+    return ModeloInfoOut(
+        version=modelo.version,
+        fecha_entrenamiento=(
+            modelo.fecha_entrenamiento.isoformat() if modelo.fecha_entrenamiento else None
+        ),
+        r2=_numero(r"R2=(\d+(?:\.\d+)?)", notas),
+        umbral_r2=UMBRAL_R2,
+        f1=_numero(r"F1=(\d+(?:\.\d+)?)", notas),
+        umbral_f1=UMBRAL_F1,
+        precision=_numero(r"precision=(\d+(?:\.\d+)?)", notas),
+        recall=_numero(r"recall=(\d+(?:\.\d+)?)", notas),
+        snapshots_total=int(total) if total is not None else None,
+        snapshots_entrenamiento=int(reparto.group(1)) if reparto else None,
+        snapshots_prueba=int(reparto.group(2)) if reparto else None,
+        variables=variables,
+        clientes_con_prediccion=con_prediccion,
+        notas=notas or None,
+    )
 
 
 def categorizar(riesgo_abandono: float) -> str:

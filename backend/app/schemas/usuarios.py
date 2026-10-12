@@ -7,6 +7,7 @@ class UsuarioCreate(BaseModel):
     email: str
     rol: str  # "Administrador" | "Analista"
     password: str
+    telefono: str | None = None
 
 
 class UsuarioUpdate(BaseModel):
@@ -14,6 +15,7 @@ class UsuarioUpdate(BaseModel):
     email: str
     rol: str
     password: str | None = None
+    telefono: str | None = None
 
 
 class EstadoUpdate(BaseModel):
@@ -27,6 +29,7 @@ class UsuarioOut(BaseModel):
     rol: str
     estado: str
     ultima_sesion: datetime | None
+    telefono: str | None = None
 
     class Config:
         from_attributes = True

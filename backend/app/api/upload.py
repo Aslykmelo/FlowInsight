@@ -92,7 +92,10 @@ async def cargar_excel(
     productos_creados = 0
     pedidos_creados = 0
     filas_procesadas = 0
-    filas_duplicadas = 0  
+    filas_duplicadas = 0
+    # La sesion usa autoflush=False: una fila repetida dentro del mismo archivo
+    # aun no esta en la BD cuando se consulta, asi que se rastrea en memoria.
+    hashes_en_archivo: set[str] = set()
 
     for i, fila in df.iterrows():
         try:
@@ -120,15 +123,18 @@ async def cargar_excel(
                 fecha_pedido,
             )
 
-            ya_existe = (
+            ya_existe = row_hash in hashes_en_archivo or (
                 db.query(DetallePedido)
                 .filter(DetallePedido.origen_hash == row_hash)
                 .first()
+                is not None
             )
 
             if ya_existe:
                 filas_duplicadas += 1
                 continue  # se salta la fila, no crea nada nuevo
+
+            hashes_en_archivo.add(row_hash)
 
             cliente = (
                 db.query(Cliente)

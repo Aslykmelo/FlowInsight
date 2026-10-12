@@ -170,8 +170,8 @@ def reentrenar_final(dataset: pd.DataFrame):
     return regresor, clasificador
 
 
-def poblar_predicciones(db, regresor, clasificador, clientes: pd.DataFrame, pedidos: pd.DataFrame, id_modelo: int):
-    ahora = pd.Timestamp(pd.Timestamp.now("UTC").date())
+def poblar_predicciones(db, regresor, clasificador, clientes: pd.DataFrame, pedidos: pd.DataFrame, id_modelo: int, ahora=None):
+    ahora = pd.Timestamp(ahora) if ahora is not None else pd.Timestamp(pd.Timestamp.now("UTC").date())
     registro_por_cliente = clientes.set_index("id_cliente")["fecha_registro"].to_dict()
 
     db.query(PrediccionCliente).filter(PrediccionCliente.id_modelo == id_modelo).delete()

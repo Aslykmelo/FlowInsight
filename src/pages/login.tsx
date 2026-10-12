@@ -453,6 +453,7 @@ export default function Login() {
             {loading ? "Iniciando sesión..." : "Iniciar sesión →"}
           </button>
 
+          {import.meta.env.DEV && (<>
           {/* =========================
               DIVISOR
           ========================== */}
@@ -552,6 +553,7 @@ export default function Login() {
               </span>
             </div>
           </div>
+          </>)}
         </div>
 
         {/* =========================

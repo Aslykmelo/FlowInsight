@@ -11,13 +11,14 @@ Centraliza los pedidos y clientes que hoy se manejan en archivos Excel, calcula 
 | Frontend (React + Vite + TS) | Funcional: dashboard, carga de Excel, predicciones, clientes, reportes, promociones, mapa de Bogotá, cubo OLAP 3D, usuarios; diseño responsivo |
 | Backend (FastAPI + PostgreSQL) | Funcional: autenticación JWT con roles (Administrador / Analista), recuperación de contraseña por SMS, perfil de usuario, ETL de Excel con deduplicación, dashboard, reportes Excel/PDF, promociones, OLAP, predicciones |
 | Modelo de IA | Entrenado y conectado al backend. Resultado sobre el dataset sintético: R² = 0.23 (meta 0.75) y F1 = 0.30 (meta 0.78); ver limitación abajo |
-| Pruebas | 54 pruebas automatizadas (pytest), 81 % de cobertura del backend |
+| Pruebas | 55 pruebas automatizadas (pytest), 81 % de cobertura del backend |
 | Despliegue | Solo entorno local de prueba; sin despliegue en producción |
 
 ### Limitaciones conocidas
 
 - La precisión de los modelos está por debajo de la meta porque el dataset sintético no reproduce la dependencia temporal de un abandono real; se espera mejorar con historial real de la empresa.
-- Solo se aceptan archivos `.xlsx` / `.xls` en la carga (no `.csv`).
+- Solo se aceptan archivos `.xlsx` / `.xls` en la carga (no `.csv`), de hasta 10 MB. La carga procesa unas 200 filas por segundo (10.000 filas en ~52 s).
+- `GET /clientes/` devuelve todos los clientes con su historial en una sola respuesta (3,9 MB con 400 clientes); no pagina.
 - No hay alertas automáticas ni reentrenamiento periódico del modelo (el reentrenamiento es manual con `train_model.py`).
 - No hay registro de logs de auditoría ni cifrado de datos de clientes a nivel de aplicación.
 - El CORS del backend solo admite `http://localhost:<puerto>`.

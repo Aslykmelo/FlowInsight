@@ -11,7 +11,7 @@ Centraliza los pedidos y clientes que hoy se manejan en archivos Excel, calcula 
 | Frontend (React + Vite + TS) | Funcional: dashboard, carga de Excel, predicciones, clientes, reportes, promociones, mapa de Bogotá, cubo OLAP 3D, usuarios; diseño responsivo |
 | Backend (FastAPI + PostgreSQL) | Funcional: autenticación JWT con roles (Administrador / Analista), recuperación de contraseña por SMS, perfil de usuario, ETL de Excel con deduplicación, dashboard, reportes Excel/PDF, promociones, OLAP, predicciones |
 | Modelo de IA | Entrenado y conectado al backend. Resultado sobre el dataset sintético: R² = 0.23 (meta 0.75) y F1 = 0.30 (meta 0.78); ver limitación abajo |
-| Pruebas | 55 pruebas automatizadas (pytest), 81 % de cobertura del backend |
+| Pruebas | 63 pruebas automatizadas (pytest), 81 % de cobertura del backend |
 | Despliegue | Solo entorno local de prueba; sin despliegue en producción |
 
 ### Limitaciones conocidas
@@ -89,6 +89,19 @@ pytest --cov=app
 ```
 
 Las pruebas corren sobre la base de desarrollo dentro de transacciones que se revierten al terminar, por lo que no alteran los datos.
+
+## Demostraciones: re-anclar las fechas del dataset simulado
+
+El dataset simulado termina el 29 de agosto de 2026, pero la aplicación calcula el estado de cada cliente (Activo ≤ 15 días, En riesgo ≤ 30, Inactivo > 30) contra la fecha de hoy; con el tiempo todos aparecen como inactivos. Para una demostración se puede desplazar todo el historial por el mismo número de días:
+
+```bash
+cd backend
+python reanclar_fechas.py --fin 2026-11-06              # vista previa, no escribe nada
+python reanclar_fechas.py --fin 2026-11-06 --aplicar    # desplaza fechas y recalcula predicciones
+python reanclar_fechas.py --fin 2026-08-29 --aplicar    # vuelve al estado original
+```
+
+Solo se mueven `pedido.fecha_pedido` y `cliente.fecha_registro`, y todo por la misma cantidad de días: los intervalos entre compras, los montos y las métricas del modelo (R² 0,2289, F1 0,2971) no cambian. Solo para datos simulados.
 
 ## Equipo
 

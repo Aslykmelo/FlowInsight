@@ -1,3 +1,4 @@
+import { API_URL } from "../config";
 import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
 
@@ -28,7 +29,6 @@ const FILTROS: { value: ClientePromocion["categoria"] | "todos"; label: string }
   { value: "activo", label: "Activo" },
 ];
 
-const API_URL = "http://localhost:8000";
 
 export default function Promotions() {
   const [clientes, setClientes] = useState<ClientePromocion[]>([]);

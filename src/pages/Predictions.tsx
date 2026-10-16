@@ -1,3 +1,4 @@
+import { API_URL } from "../config";
 import { useEffect, useRef, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import EmptyState from "../components/EmptyState";
@@ -37,7 +38,6 @@ interface ApiPrediccion {
   historial: { fecha: string; monto: number }[];
 }
 
-const API_URL = "http://127.0.0.1:8000";
 
 // ─── Helpers ──────────────────────────────────────────
 const riesgoValido = (r: string): Prediction["riesgo"] =>

@@ -1,3 +1,4 @@
+import { API_URL } from "../config";
 import { useEffect, useRef, useState } from "react";
 import Sidebar from "../components/Sidebar";
 
@@ -30,7 +31,6 @@ interface UserFormData {
   telefono: string;
 }
 
-const API_URL = "http://127.0.0.1:8000";
 
 const ESTADO_STYLE: Record<User["estado"], { color: string; bg: string; label: string }> = {
   activo:   { color: "#0F6E56", bg: "#E1F5EE", label: "Activo"   },

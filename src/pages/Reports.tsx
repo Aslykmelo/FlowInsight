@@ -1,3 +1,4 @@
+import { API_URL } from "../config";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Sidebar from "../components/Sidebar";
@@ -34,7 +35,6 @@ interface DropdownState {
   rect: DOMRect;
 }
 
-const API_URL = "http://127.0.0.1:8000";
 
 const ESTADO_STYLE: Record<Report["estado"], { color: string; bg: string; label: string }> = {
   listo:     { color: "#0F6E56", bg: "#E1F5EE", label: "Listo"     },

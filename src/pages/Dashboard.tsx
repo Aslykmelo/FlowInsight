@@ -1,3 +1,4 @@
+import { API_URL } from "../config";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
@@ -56,7 +57,6 @@ interface FetchState<T> {
   error: string | null;
 }
 
-const API_URL = "http://127.0.0.1:8000";
 const REFRESH_MS = 60000;
 
 const NOMBRES_MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];

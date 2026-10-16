@@ -1,3 +1,4 @@
+import { API_URL } from "../config";
 import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -12,7 +13,6 @@ interface VentaLocalidad {
   ingresos: number;
 }
 
-const API_URL = "http://localhost:8000";
 const CENTRO_BOGOTA: [number, number] = [4.66, -74.1];
 
 const formatoCOP = new Intl.NumberFormat("es-CO", {

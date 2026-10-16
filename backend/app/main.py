@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from app.core.config import settings
 from app.db.session import engine
 from app.api import clientes, auth, productos, pedidos, dashboard, upload, reportes, promociones, usuarios, olap, predicciones
 
@@ -9,7 +10,8 @@ app = FastAPI(title="FlowInsight API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://localhost:\d+",
+    allow_origins=[url.strip().rstrip("/") for url in settings.frontend_url.split(",") if url.strip()],
+    allow_origin_regex=r"http://localhost:\d+",  # sigue funcionando en desarrollo
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

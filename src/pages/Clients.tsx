@@ -1,3 +1,4 @@
+import { API_URL } from "../config";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
@@ -32,7 +33,6 @@ interface ApiClienteResumen {
   estado: "activo" | "en riesgo" | "inactivo";
 }
 
-const API_URL = "http://127.0.0.1:8000";
 
 const ESTADO_STYLE: Record<string, { color: string; bg: string }> = {
   "activo":    { color:"#0F6E56", bg:"#E1F5EE" },

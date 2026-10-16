@@ -1,3 +1,4 @@
+import { API_URL } from "../config";
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios, { AxiosError } from "axios";
@@ -20,7 +21,6 @@ interface CampoSistema {
   label: string;
 }
 
-const API_URL = "http://127.0.0.1:8000";
 
 // Oculta visualmente pero deja perceptible para lectores de pantalla
 // y alcanzable con Tab (a diferencia de display:none).

@@ -1,3 +1,4 @@
+import { API_URL } from "../config";
 import { useEffect, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Text, Html } from "@react-three/drei";
@@ -18,7 +19,6 @@ interface CuboData {
   celdas: Celda[];
 }
 
-const API_URL = "http://localhost:8000";
 
 const COLOR_SEGMENTO: Record<string, string> = {
   activo: "#1D9E75",

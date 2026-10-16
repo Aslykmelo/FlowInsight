@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     # Origenes del frontend que pueden llamar a la API, separados por coma.
     # Ejemplo en Railway: FRONTEND_URL=https://flowinsight.vercel.app
-    frontend_url: str = ""
+    frontend_url: str = "https://flow-insight-sigma.vercel.app"
 
     # Recuperacion de contrasena por SMS.
     # sms_provider="consola": el codigo solo se escribe en el log del servidor (desarrollo).

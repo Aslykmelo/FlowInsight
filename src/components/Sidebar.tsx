@@ -11,7 +11,7 @@ const NAV: { emoji: string; label: string; path: string; soloAdmin?: boolean }[]
   { emoji:"📄", label:"Reportes",     path:"/reports"      },
   { emoji:"🎯", label:"Promociones",  path:"/promotions"   },
   { emoji:"🗺️", label:"Mapa Bogotá",  path:"/sales-map"    },
-  { emoji:"📦", label:"Cubo OLAP 3D", path:"/olap-cube"    },
+  { emoji:"📦", label:"Cubo OLAP", path:"/olap-cube"    },
   { emoji:"🧠", label:"Cómo funciona", path:"/model"       },
   { emoji:"⚙️", label:"Usuarios",     path:"/users", soloAdmin:true },
   { emoji:"👤", label:"Mi perfil",    path:"/profile"      },

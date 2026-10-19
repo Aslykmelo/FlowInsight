@@ -245,6 +245,80 @@ function PillEje({ color, icono, texto, style }: { color: string; icono: string;
   );
 }
 
+const compacto = new Intl.NumberFormat("es-CO", { notation: "compact", maximumFractionDigits: 1 });
+const entero = new Intl.NumberFormat("es-CO");
+
+type Medida = "ingresos" | "cantidad";
+
+function TablaCalor({
+  productos, meses, mapaValores, segmentos, medida, seleccion, setSeleccion,
+}: {
+  productos: string[];
+  meses: string[];
+  mapaValores: Map<string, { ingresos: number; cantidad: number }>;
+  segmentos: string[];
+  medida: Medida;
+  seleccion: { producto: string; mes: string } | null;
+  setSeleccion: (s: { producto: string; mes: string } | null) => void;
+}) {
+  const valor = (producto: string, mes: string) =>
+    segmentos.reduce((acc, seg) => acc + (mapaValores.get(`${producto}|${mes}|${seg}`)?.[medida] ?? 0), 0);
+
+  const maximo = Math.max(1, ...productos.flatMap((p) => meses.map((m) => valor(p, m))));
+  const formato = (v: number) => (v === 0 ? "—" : medida === "ingresos" ? `$ ${compacto.format(v)}` : entero.format(v));
+  const th = { padding: "8px 10px", fontSize: 12, fontWeight: 500, color: "#555", textAlign: "center" as const };
+
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ borderCollapse: "separate", borderSpacing: 3, width: "100%", minWidth: 760 }}>
+        <thead>
+          <tr>
+            <th style={{ ...th, textAlign: "left" }}>Producto</th>
+            {meses.map((m) => (
+              <th key={m} style={th}>{NOMBRES_MESES[Number(m.split("-")[1]) - 1]}</th>
+            ))}
+            <th style={th}>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {productos.map((p) => {
+            const total = meses.reduce((acc, m) => acc + valor(p, m), 0);
+            return (
+              <tr key={p}>
+                <td style={{ padding: "6px 10px", fontSize: 12, color: "#333", whiteSpace: "nowrap" }}>{p}</td>
+                {meses.map((m) => {
+                  const v = valor(p, m);
+                  const elegido = seleccion?.producto === p && seleccion.mes === m;
+                  return (
+                    <td key={m} style={{ padding: 0 }}>
+                      <button
+                        type="button"
+                        onClick={() => setSeleccion(elegido ? null : { producto: p, mes: m })}
+                        aria-label={`${p}, ${m}: ${formato(v)}`}
+                        style={{
+                          width: "100%", height: 34, border: elegido ? "2px solid #1B2430" : "none", borderRadius: 6,
+                          cursor: v ? "pointer" : "default", fontSize: 11,
+                          background: v ? `rgba(83,74,183,${0.1 + (v / maximo) * 0.85})` : "#f3f3f7",
+                          color: v / maximo > 0.5 ? "#fff" : "#333",
+                        }}
+                      >
+                        {formato(v)}
+                      </button>
+                    </td>
+                  );
+                })}
+                <td style={{ padding: "6px 10px", fontSize: 12, fontWeight: 600, textAlign: "center", color: "#333" }}>
+                  {formato(total)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function OlapCube() {
   const [datos, setDatos] = useState<CuboData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -256,6 +330,9 @@ export default function OlapCube() {
     en_riesgo: true,
   });
   const [hover, setHover] = useState<CeldaGrid | null>(null);
+  const [vista, setVista] = useState<"tabla" | "cubo3d">("tabla");
+  const [medida, setMedida] = useState<Medida>("ingresos");
+  const [seleccion, setSeleccion] = useState<{ producto: string; mes: string } | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -302,17 +379,60 @@ export default function OlapCube() {
     setSegmentosVisibles((prev) => ({ ...prev, [seg]: !prev[seg] }));
   };
 
+  // Lectura automatica del cubo: todo sale de los mismos datos que se dibujan, no hay cifras aparte.
+  const resumen = useMemo(() => {
+    if (!datos || mesesDelAnio.length === 0) return null;
+    const suma = (filtro: (c: Celda) => boolean) =>
+      datos.celdas.filter((c) => c.mes.startsWith(anioSeleccionado ?? "") && filtro(c))
+        .reduce((acc, c) => acc + c[medida], 0);
+    const visibles = (c: Celda) => segmentosVisibles[c.segmento];
+    const total = suma(visibles);
+    const porProducto = datos.productos.map((p) => ({ nombre: p, v: suma((c) => visibles(c) && c.producto === p) }));
+    const porMes = mesesDelAnio.map((m) => ({ nombre: m, v: suma((c) => visibles(c) && c.mes === m) }));
+    const porSegmento = datos.segmentos.map((sg) => ({ nombre: sg, v: suma((c) => c.segmento === sg) }));
+    const mayor = (l: { nombre: string; v: number }[]) => [...l].sort((a, b) => b.v - a.v)[0];
+    const mesesConVenta = porMes.filter((m) => m.v > 0);
+    const menor = [...mesesConVenta].sort((a, b) => a.v - b.v)[0];
+    return { total, producto: mayor(porProducto), mes: mayor(porMes), mesFlojo: menor, segmento: mayor(porSegmento) };
+  }, [datos, anioSeleccionado, mesesDelAnio, medida, segmentosVisibles]);
+
+  const nombreMes = (m: string) => NOMBRES_MESES[Number(m.split("-")[1]) - 1];
+  const fmt = (v: number) => (medida === "ingresos" ? formatoCOP.format(v) : `${entero.format(v)} unidades`);
+  const pct = (v: number, total: number) => (total > 0 ? `${Math.round((v / total) * 100)} %` : "0 %");
+
+  const detalleSeleccion = useMemo(() => {
+    if (!seleccion) return null;
+    return (datos?.segmentos ?? []).map((sg) => {
+      const c = mapaValores.get(`${seleccion.producto}|${seleccion.mes}|${sg}`);
+      return { segmento: sg, ingresos: c?.ingresos ?? 0, cantidad: c?.cantidad ?? 0 };
+    });
+  }, [seleccion, datos, mapaValores]);
+
+  const botonPestana = (v: "tabla" | "cubo3d", texto: string) => (
+    <button
+      key={v}
+      onClick={() => setVista(v)}
+      aria-pressed={vista === v}
+      style={{ background: vista === v ? "#534AB7" : "#fff", color: vista === v ? "#fff" : "#555",
+        border: vista === v ? "none" : "0.5px solid #d0d0d0", borderRadius: 6, padding: "6px 14px",
+        fontSize: 13, cursor: "pointer" }}
+    >
+      {texto}
+    </button>
+  );
+
   return (
     <div className="app-shell" style={{ background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
       <Sidebar />
 
       <div className="app-main">
         <header style={{ background: "#fff", borderBottom: "0.5px solid #e0e0e0",
-          padding: "0.875rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          padding: "0.875rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center",
+          flexWrap: "wrap", gap: 8 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Cubo OLAP 3D</h1>
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Cubo OLAP: ventas por producto, mes y tipo de cliente</h1>
             <p style={{ margin: 0, fontSize: 13, color: "#888" }}>
-              Ingresos por Producto × Tiempo × Segmento RFM — arrastra para rotar, scroll para zoom
+              Cruza qué se vende, cuándo y a qué tipo de cliente, para ver dónde está el negocio
             </p>
           </div>
 
@@ -334,7 +454,61 @@ export default function OlapCube() {
             <p style={{ fontSize: 13, color: "#993C1D" }}>{error}</p>
           ) : (
             <>
-              <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+              <details style={{ background: "#fff", border: "0.5px solid #e0e0e0", borderRadius: 12, padding: "12px 16px" }}>
+                <summary style={{ cursor: "pointer", fontSize: 14, fontWeight: 500 }}>
+                  ¿Qué es este cubo y cómo se lee?
+                </summary>
+                <div style={{ marginTop: 10, fontSize: 13, color: "#555", lineHeight: 1.65 }}>
+                  <p style={{ margin: "0 0 8px" }}>
+                    Un cubo OLAP es una forma de ordenar las ventas en tres ejes para poder cruzarlos rápido:
+                    <strong> producto</strong> (qué se vende), <strong>tiempo</strong> (en qué mes) y
+                    <strong> tipo de cliente</strong> (activo, ocasional o en riesgo, según cuánto lleva sin comprar).
+                    Cada casilla guarda lo vendido en la combinación de los tres.
+                  </p>
+                  <p style={{ margin: "0 0 8px" }}>
+                    En la tabla de calor, cada fila es un producto y cada columna un mes: entre más oscuro el
+                    morado, más se vendió. Toca una casilla para ver cómo se reparte entre los tipos de cliente.
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    Con los filtros haces las operaciones típicas de un cubo: elegir un <em>año</em> o un
+                    <em> tipo de cliente</em> (cortar), cambiar entre <em>ingresos</em> y <em>unidades</em>, o tocar
+                    una casilla para bajar al detalle. La vista 3D muestra los mismos datos como un bloque.
+                  </p>
+                </div>
+              </details>
+
+              {resumen && resumen.total > 0 && (
+                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                  {[
+                    ["Total del año", fmt(resumen.total)],
+                    ["Producto líder", `${resumen.producto.nombre} (${pct(resumen.producto.v, resumen.total)})`],
+                    ["Mejor mes", `${nombreMes(resumen.mes.nombre)} (${fmt(resumen.mes.v)})`],
+                    ["Mes más flojo", resumen.mesFlojo ? `${nombreMes(resumen.mesFlojo.nombre)} (${fmt(resumen.mesFlojo.v)})` : "—"],
+                    ["Cliente que más aporta", `${LABEL_SEGMENTO[resumen.segmento.nombre]} (${pct(resumen.segmento.v, resumen.total)})`],
+                  ].map(([titulo, valor]) => (
+                    <div key={titulo} style={{ flex: "1 1 190px", background: "#fff", border: "0.5px solid #e0e0e0",
+                      borderRadius: 12, padding: 14 }}>
+                      <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{titulo}</p>
+                      <p style={{ margin: "4px 0 0", fontSize: 15, fontWeight: 500, lineHeight: 1.35 }}>{valor}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                {botonPestana("tabla", "Tabla de calor")}
+                {botonPestana("cubo3d", "Cubo 3D")}
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#555", marginLeft: 8 }}>
+                  Medir en:
+                  <select value={medida} onChange={(e) => setMedida(e.target.value as Medida)}
+                    style={{ padding: "5px 8px", borderRadius: 6, border: "0.5px solid #d0d0d0", fontSize: 12 }}>
+                    <option value="ingresos">Ingresos ($)</option>
+                    <option value="cantidad">Unidades vendidas</option>
+                  </select>
+                </label>
+              </div>
+
+              <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
                 <span style={{ fontSize: 12, color: "#888" }}>Segmento RFM (recencia):</span>
                 {Object.keys(COLOR_SEGMENTO).map((seg) => (
                   <label key={seg} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" }}>
@@ -345,6 +519,35 @@ export default function OlapCube() {
                 ))}
               </div>
 
+              {vista === "tabla" && datos && anioSeleccionado && (
+                <div style={{ background: "#fff", border: "0.5px solid #e0e0e0", borderRadius: 12, padding: 12 }}>
+                  <TablaCalor
+                    productos={datos.productos}
+                    meses={mesesDelAnio}
+                    mapaValores={mapaValores}
+                    segmentos={segmentosActivos}
+                    medida={medida}
+                    seleccion={seleccion}
+                    setSeleccion={setSeleccion}
+                  />
+                  {detalleSeleccion && seleccion && (
+                    <div style={{ marginTop: 12, padding: 12, background: "#F6F5FD", borderRadius: 8, fontSize: 13 }}>
+                      <strong>{seleccion.producto}</strong> en {nombreMes(seleccion.mes)} — por tipo de cliente:
+                      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 6 }}>
+                        {detalleSeleccion.map((d) => (
+                          <span key={d.segmento} style={{ color: "#444" }}>
+                            <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 5, marginRight: 6,
+                              background: COLOR_SEGMENTO[d.segmento] }} />
+                            {LABEL_SEGMENTO[d.segmento]}: {formatoCOP.format(d.ingresos)} ({entero.format(d.cantidad)} u.)
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {vista === "cubo3d" && (
               <div style={{ position: "relative", background: "#fff", border: "0.5px solid #e0e0e0", borderRadius: 12,
                 height: 580, overflow: "hidden" }}>
                 {loading ? (
@@ -372,9 +575,11 @@ export default function OlapCube() {
                   </>
                 ) : null}
               </div>
+              )}
 
-              {datos && (
+              {datos && vista === "cubo3d" && (
                 <p style={{ margin: 0, fontSize: 12, color: "#aaa" }}>
+                  Arrastra para rotar y usa la rueda para acercar.{" "}
                   Cada celda es un cubo del OLAP; las apagadas no tuvieron ventas. Intensidad de color = ingresos.{" "}
                   {datos.productos.map((p, i) => `${dosDigitos(i + 1)}=${p}`).join(" · ")}
                 </p>

@@ -5,7 +5,7 @@ import Sidebar from "../components/Sidebar";
 import EmptyState from "../components/EmptyState";
 import ErrorMessage from "../components/ErrorMessage";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { Search, X, CircleCheck, TriangleAlert, CircleX, Users, type LucideIcon } from "lucide-react";
+import { Search, X, CircleCheck, TriangleAlert, Clock, CircleDashed, Users, type LucideIcon } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────
 interface Client {
@@ -19,8 +19,11 @@ interface Client {
   ultimaCompraISO: string | null;   // fecha real, para filtrar/ordenar
   ultimaCompra: string;             // fecha ya formateada, para mostrar
   intervalo: number | null;
-  estado: "activo" | "en riesgo" | "inactivo";
+  estado: Estado;
 }
+
+// Mismas categorías que Promociones, el mapa y el cubo OLAP (por días desde la última compra).
+type Estado = "activo" | "ocasional" | "en_riesgo" | "sin_pedidos";
 
 interface ApiClienteResumen {
   id_cliente: number;
@@ -33,14 +36,15 @@ interface ApiClienteResumen {
   monto_total: number;
   ultima_compra: string | null;
   intervalo_promedio: number | null;
-  estado: "activo" | "en riesgo" | "inactivo";
+  estado: Estado;
 }
 
 // Cada estado lleva color, ícono y texto: nunca se comunica solo con color.
 const ESTADO_STYLE: Record<Client["estado"], { chip: string; icon: LucideIcon; label: string; color: string }> = {
-  "activo":    { chip: "chip chip-ok",   icon: CircleCheck,   label: "Activo",    color: "var(--c-ok)" },
-  "en riesgo": { chip: "chip chip-warn", icon: TriangleAlert, label: "En riesgo", color: "var(--c-warn)" },
-  "inactivo":  { chip: "chip chip-bad",  icon: CircleX,       label: "Inactivo",  color: "var(--c-bad)" },
+  activo:      { chip: "chip chip-ok",      icon: CircleCheck,   label: "Activo",      color: "var(--c-ok)" },
+  ocasional:   { chip: "chip chip-warn",    icon: Clock,         label: "Ocasional",   color: "var(--c-warn)" },
+  en_riesgo:   { chip: "chip chip-bad",     icon: TriangleAlert, label: "En riesgo",   color: "var(--c-bad)" },
+  sin_pedidos: { chip: "chip chip-neutral", icon: CircleDashed,  label: "Sin pedidos", color: "var(--c-muted)" },
 };
 
 function EstadoChip({ estado }: { estado: Client["estado"] }) {
@@ -188,7 +192,7 @@ export default function Clients() {
   const [error, setError] = useState("");
 
   const [busqueda, setBusqueda]   = useState("");
-  const [filtro, setFiltro]       = useState<"todos" | "activo" | "en riesgo" | "inactivo">("todos");
+  const [filtro, setFiltro]       = useState<"todos" | Estado>("todos");
   const [selected, setSelected]   = useState<Client | null>(null);
 
   const [ciudad, setCiudad]             = useState("todas");
@@ -289,10 +293,11 @@ export default function Clients() {
       c.ciudad.toLowerCase().includes(busqueda.toLowerCase())
     );
 
-  const conteo = {
-    activo:    clients.filter(c => c.estado === "activo").length,
-    enRiesgo:  clients.filter(c => c.estado === "en riesgo").length,
-    inactivo:  clients.filter(c => c.estado === "inactivo").length,
+  const conteo: Record<Estado, number> = {
+    activo:      clients.filter(c => c.estado === "activo").length,
+    ocasional:   clients.filter(c => c.estado === "ocasional").length,
+    en_riesgo:   clients.filter(c => c.estado === "en_riesgo").length,
+    sin_pedidos: clients.filter(c => c.estado === "sin_pedidos").length,
   };
 
   const encabezado = (extra?: React.ReactNode) => (
@@ -339,11 +344,10 @@ export default function Clients() {
     );
   }
 
-  const resumen: { key: Client["estado"]; label: string; count: number }[] = [
-    { key:"activo",    label:"Activos",   count: conteo.activo },
-    { key:"en riesgo", label:"En riesgo", count: conteo.enRiesgo },
-    { key:"inactivo",  label:"Inactivos", count: conteo.inactivo },
-  ];
+  const ORDEN: Estado[] = ["activo", "ocasional", "en_riesgo", ...(conteo.sin_pedidos > 0 ? (["sin_pedidos"] as Estado[]) : [])];
+  const resumen: { key: Estado; label: string; count: number }[] = ORDEN.map(key => ({
+    key, label: ESTADO_STYLE[key].label, count: conteo[key],
+  }));
 
   return (
     <div className="app-shell">
@@ -382,6 +386,11 @@ export default function Clients() {
               );
             })}
           </section>
+          <p style={{ margin: "calc(var(--s-3) * -1) 0 0", fontSize: 13, color: "var(--c-muted)" }}>
+            Se clasifican por los días desde su última compra: <strong>Activo</strong>, hasta 30 días;
+            {" "}<strong>Ocasional</strong>, de 31 a 90; <strong>En riesgo</strong>, más de 90. Son las mismas
+            categorías de Promociones, el mapa y el cubo OLAP.
+          </p>
 
           {/* Búsqueda y filtros */}
           <section aria-label="Búsqueda y filtros" className="card" style={{ display:"flex", flexDirection:"column", gap:"var(--s-4)", padding:"var(--s-4) var(--s-5)" }}>
@@ -393,10 +402,10 @@ export default function Clients() {
                   value={busqueda} onChange={e => setBusqueda(e.target.value)} />
               </div>
               <div className="cli-seg" role="group" aria-label="Filtrar por estado">
-                {(["todos","activo","en riesgo","inactivo"] as const).map(f => (
+                {(["todos", ...ORDEN] as const).map(f => (
                   <button key={f} type="button" className="btn" aria-pressed={filtro === f}
                     onClick={() => setFiltro(f)}>
-                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                    {f === "todos" ? "Todos" : ESTADO_STYLE[f].label}
                   </button>
                 ))}
               </div>

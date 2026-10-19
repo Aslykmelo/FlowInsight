@@ -13,6 +13,7 @@ from app.schemas.promociones import (
     ClientePromocion, MensajePromocionOut, AccionPromocion, EnvioCorreoIn, EnvioCorreoOut,
 )
 from app.core.config import settings
+from app.core.segmentos import categorizar, UMBRAL_ACTIVO, UMBRAL_OCASIONAL  # noqa: F401
 from app.core.correo import enviar_correo, correo_real_disponible
 from app.core.plantillas_correo import correo_promocion
 from app.core.dependencies import get_current_user
@@ -20,26 +21,8 @@ from app.core.dependencies import get_current_user
 router = APIRouter(prefix="/promociones", tags=["promociones"])
 
 
-# ============================================================
-# Umbrales de recencia (dias sin comprar) calcados de los
-# perfiles usados para generar el dataset: activo = compras
-# recientes, ocasional = hasta 45 dias sin comprar, en_riesgo
-# = 90 a 250 dias sin comprar. Mientras no exista un modelo de
-# IA entrenado (PrediccionCliente.riesgo_abandono), esta es la
-# señal real que usamos; el dia que el modelo este entrenado,
-# se puede reemplazar esta categorizacion por riesgo_abandono
-# sin tocar el resto del endpoint.
-# ============================================================
-UMBRAL_ACTIVO = 30
-UMBRAL_OCASIONAL = 90
-
-
-def categorizar(dias_sin_comprar: int) -> str:
-    if dias_sin_comprar <= UMBRAL_ACTIVO:
-        return "activo"
-    if dias_sin_comprar <= UMBRAL_OCASIONAL:
-        return "ocasional"
-    return "en_riesgo"
+# Las categorias (activo / ocasional / en_riesgo) viven en app.core.segmentos y se comparten con
+# Clientes, OLAP y el mapa; aqui se reexportan para no romper los importadores existentes.
 
 
 def producto_favorito_de(db: Session, id_cliente: int) -> Optional[str]:

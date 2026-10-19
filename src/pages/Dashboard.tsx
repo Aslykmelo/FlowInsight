@@ -43,7 +43,7 @@ interface ApiClienteResumen {
   ciudad: string | null;
   monto_total: number;
   ultima_compra: string | null;
-  estado: "activo" | "en riesgo" | "inactivo";
+  estado: "activo" | "ocasional" | "en_riesgo" | "sin_pedidos";
 }
 
 interface SalesPoint {
@@ -399,7 +399,7 @@ export default function Dashboard() {
 
   const clientesEnRiesgo = useMemo(() => {
     if (!clientesState.data) return [];
-    return clientesState.data.filter((c) => c.estado === "en riesgo");
+    return clientesState.data.filter((c) => c.estado === "en_riesgo");
   }, [clientesState.data]);
 
   const kpis = kpisState.data;

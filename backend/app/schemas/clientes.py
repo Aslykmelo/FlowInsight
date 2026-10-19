@@ -38,7 +38,8 @@ class ClienteResumen(BaseModel):
     monto_total: float
     ultima_compra: datetime | None
     intervalo_promedio: int | None
-    estado: str
+    estado: str  # activo | ocasional | en_riesgo | sin_pedidos (ver app.core.segmentos)
+    dias_sin_comprar: int | None = None
 
     class Config:
         from_attributes = True

@@ -224,6 +224,7 @@ button, input, select, textarea {
 .chip-ok { background: var(--c-ok-soft); color: var(--c-ok); }
 .chip-warn { background: var(--c-warn-soft); color: var(--c-warn); }
 .chip-bad { background: var(--c-bad-soft); color: var(--c-bad); }
+.chip-neutral { background: #eef1f5; color: var(--c-muted); }
 .chip-info { background: var(--c-info-soft); color: var(--c-info); }
 
 /* ---------- Tablas ---------- */

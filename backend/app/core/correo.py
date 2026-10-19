@@ -1,6 +1,7 @@
 import logging
 import smtplib
 from email.message import EmailMessage
+from email.utils import formatdate, make_msgid, parseaddr
 
 import httpx
 
@@ -36,7 +37,10 @@ def _enviar_resend(destino: str, asunto: str, html: str, texto: str) -> bool:
         respuesta = httpx.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {settings.resend_api_key}"},
-            json={"from": settings.email_from, "to": [destino], "subject": asunto, "html": html, "text": texto},
+            json={
+                "from": settings.email_from, "to": [destino], "subject": asunto, "html": html, "text": texto,
+                "headers": {"Auto-Submitted": "auto-generated", "X-Auto-Response-Suppress": "All"},
+            },
             timeout=15,
         )
     except httpx.HTTPError:
@@ -56,6 +60,11 @@ def _enviar_smtp(destino: str, asunto: str, html: str, texto: str) -> bool:
     mensaje["From"] = settings.email_from
     mensaje["To"] = destino
     mensaje["Subject"] = asunto
+    mensaje["Date"] = formatdate(localtime=False)
+    mensaje["Message-ID"] = make_msgid(domain=parseaddr(settings.email_from)[1].rpartition("@")[2] or None)
+    # Marca el correo como automatico: evita respuestas automaticas y mejora su trato en los filtros
+    mensaje["Auto-Submitted"] = "auto-generated"
+    mensaje["X-Auto-Response-Suppress"] = "All"
     mensaje.set_content(texto)
     mensaje.add_alternative(html, subtype="html")
     try:

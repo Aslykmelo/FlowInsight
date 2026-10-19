@@ -133,6 +133,12 @@ export default function Promotions() {
 
   useEffect(() => {
     pedirClientes();
+    // Llegada desde el asistente: /promotions?cliente=ID abre directamente el mensaje de ese cliente
+    const id = Number(new URLSearchParams(window.location.search).get("cliente"));
+    if (id) {
+      setFiltro("todos");
+      seleccionarCliente(id);
+    }
   }, []);
 
   const seleccionarCliente = (id: number) => {

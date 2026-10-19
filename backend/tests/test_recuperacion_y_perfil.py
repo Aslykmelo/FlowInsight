@@ -99,7 +99,9 @@ def test_sin_proveedor_de_sms_el_codigo_llega_al_correo(client, usuario_con_tele
     destino, asunto, html, texto = correos_enviados[0]
     codigo = re.search(r"es (\d{6})\.", texto).group(1)
     assert destino == CORREO
-    assert asunto == "Tu código de verificación de FlowInsight"
+    assert asunto == f"Código de verificación de FlowInsight: {codigo}"
+    assert CORREO in html and "No solicitó este cambio" in html and "hora de Colombia" in html
+    assert "nunca le pedirá" in texto and CORREO in texto
     assert codigo in html and "FlowInsight" in html and "W&amp;T Food" in html
     assert "<a " not in html          # el correo de seguridad no lleva enlaces ni botones
     res = client.post(

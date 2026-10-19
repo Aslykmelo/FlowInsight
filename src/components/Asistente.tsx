@@ -1,195 +1,114 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Info, MessageCircle, Send, X } from "lucide-react";
+import { ArrowRight, CircleCheck, Info, MessageCircle, Send, TriangleAlert, X } from "lucide-react";
+import { API_URL } from "../config";
 import { useAuth } from "../context/AuthContext";
+import {
+  SUGERIDAS, TEMAS, pideClientesPrioritarios, reconocerClientes, responder, responderTema,
+  type ClienteBasico, type Respuesta,
+} from "./asistenteMotor";
 
-// Asistente de ayuda de FlowInsight. No es un modelo de lenguaje: responde con una base de
-// conocimiento escrita a mano sobre la propia aplicación, buscando por palabras clave. Si no
-// entiende la pregunta lo dice y ofrece los temas que sí conoce.
+// Asistente de FlowInsight. Hace dos cosas:
+//  1) Orienta sobre el uso de la aplicación, entendiendo preguntas en lenguaje sencillo (asistenteMotor.ts).
+//  2) Ayuda a decidir sobre un cliente: si la pregunta menciona a uno, analiza su historial real de compras y la
+//     predicción del modelo y propone qué hacer (reglas del backend: app/core/decision_cliente.py).
+// No es un modelo de lenguaje generativo ni una red neuronal, y lo dice.
 
-interface Tema {
-  id: string;
+interface Senal { texto: string; tono: "ok" | "info" | "atencion" | "alerta" }
+interface Analisis {
+  id_cliente: number;
+  nombre_cliente: string;
+  categoria: string | null;
+  dias_sin_comprar: number | null;
+  prioridad: "alta" | "media" | "baja" | "no_contactar";
   titulo: string;
-  claves: string[];
-  respuesta: string;
-  ir?: { etiqueta: string; ruta: string };
-  soloAdmin?: boolean;
+  recomendacion: string;
+  pasos: string[];
+  senales: Senal[];
+  confianza: "alta" | "media" | "baja";
+  aviso: string;
+  puede_contactar: boolean;
 }
-
-const TEMAS: Tema[] = [
-  {
-    id: "que-es",
-    titulo: "¿Qué es FlowInsight?",
-    claves: ["que es", "para que sirve", "flowinsight", "aplicacion", "app", "sistema", "proposito"],
-    respuesta:
-      "FlowInsight es el sistema de análisis de clientes y ventas de W&T Food. Reúne el historial de pedidos, " +
-      "muestra cómo van las ventas, estima qué clientes están en riesgo de dejar de comprar y ayuda a contactarlos " +
-      "con mensajes de promoción.",
-  },
-  {
-    id: "dashboard",
-    titulo: "¿Qué muestra el Dashboard?",
-    claves: ["dashboard", "inicio", "indicadores", "kpi", "resumen", "ventas diarias", "grafico"],
-    respuesta:
-      "El Dashboard es el resumen del negocio: indicadores clave, ventas por día, productos más vendidos, ventas " +
-      "por canal y cuántos clientes hay en cada nivel de riesgo.",
-    ir: { etiqueta: "Ir al Dashboard", ruta: "/dashboard" },
-  },
-  {
-    id: "cargar",
-    titulo: "¿Cómo cargo datos desde Excel?",
-    claves: ["cargar", "subir", "excel", "xlsx", "importar", "archivo", "datos nuevos", "columnas"],
-    respuesta:
-      "En Cargar Excel: 1) confirma que tienes la autorización de los clientes para usar sus datos, 2) elige el " +
-      "archivo (.xlsx o .xls, máximo 10 MB), 3) asocia cada campo con la columna de tu archivo y 4) envía. Al final " +
-      "te dice cuántos clientes, productos y pedidos nuevos se crearon.",
-    ir: { etiqueta: "Ir a Cargar Excel", ruta: "/upload" },
-  },
-  {
-    id: "predicciones",
-    titulo: "¿Qué son las Predicciones?",
-    claves: ["prediccion", "predicciones", "riesgo", "abandono", "fuga", "proxima compra", "alerta", "ml"],
-    respuesta:
-      "La pantalla Predicciones lista a los clientes con la fecha estimada de su próxima compra y la probabilidad " +
-      "de que dejen de comprar en 90 días. Riesgo bajo: hasta 30 %. Medio: 30 a 60 %. Alto: más de 60 %. Úsala " +
-      "como una señal de apoyo; en 'Cómo funciona' se explica qué tan confiable es.",
-    ir: { etiqueta: "Ir a Predicciones", ruta: "/predictions" },
-  },
-  {
-    id: "clientes",
-    titulo: "¿Cómo busco un cliente?",
-    claves: ["cliente", "clientes", "buscar", "historial", "pedidos de un cliente"],
-    respuesta:
-      "En Clientes está el historial de cada cliente de W&T Food. Puedes buscarlo por nombre o ciudad y abrir su detalle " +
-      "para ver sus pedidos.",
-    ir: { etiqueta: "Ir a Clientes", ruta: "/clients" },
-  },
-  {
-    id: "reportes",
-    titulo: "¿Cómo descargo un informe?",
-    claves: ["reporte", "reportes", "informe", "informes", "descargar", "pdf", "excel", "exportar"],
-    respuesta:
-      "En Reportes elige el tipo (ventas, clientes, riesgo de abandono o predicciones) y el formato (PDF o Excel). " +
-      "El PDF trae indicadores, hallazgos, gráficos y el detalle; el Excel trae las tablas para trabajar con ellas. " +
-      "Después de generarlo, puedes volver a descargarlo desde la lista cuando quieras.",
-    ir: { etiqueta: "Ir a Reportes", ruta: "/reports" },
-  },
-  {
-    id: "promociones",
-    titulo: "¿Cómo envío un mensaje de promoción?",
-    claves: ["promocion", "promociones", "mensaje", "whatsapp", "enviar", "contactar", "asesor", "pedido", "correo"],
-    respuesta:
-      "En Promociones filtra por categoría (activo, ocasional o en riesgo), toca un cliente y se genera el mensaje " +
-      "con su producto favorito. Puedes copiarlo, abrirlo en WhatsApp o enviarte una vista previa por correo con los " +
-      "botones 'Hablar con un asesor' y 'Hacer un pedido'. Solo aparecen clientes que autorizaron el uso de sus datos.",
-    ir: { etiqueta: "Ir a Promociones", ruta: "/promotions" },
-  },
-  {
-    id: "mapa",
-    titulo: "¿Cómo uso el mapa?",
-    claves: ["mapa", "bogota", "localidad", "ubicacion", "donde", "tiendas", "producto que consumen"],
-    respuesta:
-      "El mapa ubica a los clientes de Bogotá. Elige un producto para ver quién lo compra, toca un punto para ver " +
-      "qué consume y cuántos días lleva sin comprar. Los colores indican si está activo, ocasional o en riesgo. " +
-      "La ubicación es aproximada dentro de la localidad, porque los datos no traen coordenadas exactas.",
-    ir: { etiqueta: "Ir al mapa", ruta: "/sales-map" },
-  },
-  {
-    id: "olap",
-    titulo: "¿Qué es el cubo OLAP?",
-    claves: ["olap", "cubo", "tabla de calor", "dimension", "producto mes", "cruzar"],
-    respuesta:
-      "El cubo OLAP cruza tres cosas: qué producto se vende, en qué mes y a qué tipo de cliente. En la tabla de " +
-      "calor, entre más oscuro el morado, más se vendió; toca una casilla para ver el detalle por tipo de cliente. " +
-      "Hay una vista 3D con los mismos datos.",
-    ir: { etiqueta: "Ir al cubo OLAP", ruta: "/olap-cube" },
-  },
-  {
-    id: "rfm",
-    titulo: "¿Qué significa RFM?",
-    claves: ["rfm", "recencia", "frecuencia", "monetario", "segmento", "activo", "ocasional", "en riesgo"],
-    respuesta:
-      "RFM resume a cada cliente con tres datos: Recencia (hace cuántos días compró por última vez), Frecuencia " +
-      "(cuántos pedidos ha hecho) y valor Monetario (cuánto ha comprado). Aquí se llama 'activo' a quien compró en " +
-      "los últimos 30 días, 'ocasional' entre 31 y 90 días y 'en riesgo' a quien lleva más de 90 días sin comprar.",
-  },
-  {
-    id: "modelo",
-    titulo: "¿Qué tan confiable es el modelo?",
-    claves: ["modelo", "confiable", "precision", "efectividad", "f1", "r2", "acierta", "inteligencia artificial", "ia"],
-    respuesta:
-      "En 'Cómo funciona' ves la precisión, la cobertura y el F1 reales del modelo. Hoy no alcanza las metas del " +
-      "proyecto porque se entrenó con datos simulados, así que conviene usarlo como apoyo y no como dato definitivo. " +
-      "El número de días sin comprar es más directo.",
-    ir: { etiqueta: "Ver cómo funciona", ruta: "/model" },
-  },
-  {
-    id: "perfil",
-    titulo: "¿Cómo cambio mis datos o mi contraseña?",
-    claves: ["perfil", "contrasena", "clave", "password", "telefono", "nombre", "cambiar", "cuenta"],
-    respuesta:
-      "En Mi perfil puedes cambiar tu nombre, tu teléfono y tu contraseña, y ver tu actividad reciente.",
-    ir: { etiqueta: "Ir a Mi perfil", ruta: "/profile" },
-  },
-  {
-    id: "olvide",
-    titulo: "Olvidé mi contraseña",
-    claves: ["olvide", "recuperar", "restablecer", "codigo", "no puedo entrar", "no recuerdo"],
-    respuesta:
-      "En la pantalla de inicio de sesión toca '¿Olvidaste tu contraseña?'. Te enviamos un código de verificación " +
-      "por SMS si tu cuenta tiene teléfono y, si no, a tu correo. El código vence en 10 minutos.",
-  },
-  {
-    id: "usuarios",
-    titulo: "¿Cómo creo usuarios?",
-    claves: ["usuario", "usuarios", "crear usuario", "rol", "roles", "permisos", "administrador", "acceso"],
-    respuesta:
-      "Solo el rol Administrador ve la pantalla Usuarios, donde se crean cuentas, se asigna el rol y se desactiva " +
-      "el acceso de quien ya no debe entrar.",
-    ir: { etiqueta: "Ir a Usuarios", ruta: "/users" },
-    soloAdmin: true,
-  },
-  {
-    id: "texto",
-    titulo: "Quiero letra más grande",
-    claves: ["letra", "texto", "tamano", "grande", "leer", "accesibilidad", "zoom"],
-    respuesta:
-      "En la parte inferior del menú lateral están los botones A- y A+ para cambiar el tamaño del texto; el " +
-      "porcentaje del medio lo restablece.",
-  },
-  {
-    id: "datos-personales",
-    titulo: "¿Qué pasa con los datos de los clientes?",
-    claves: ["datos personales", "autorizacion", "privacidad", "ley 1581", "habeas", "proteccion"],
-    respuesta:
-      "FlowInsight solo muestra o contacta a clientes que autorizaron el uso de sus datos (Ley 1581 de 2012). Al " +
-      "cargar un Excel debes confirmar que cuentas con esa autorización.",
-  },
-];
-
-const SUGERIDAS = ["rfm", "reportes", "promociones", "modelo", "mapa"];
-
-const normalizar = (t: string) =>
-  t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-
-function buscar(pregunta: string, esAdmin: boolean): Tema | null {
-  const q = ` ${normalizar(pregunta)} `;
-  let mejor: { tema: Tema; puntos: number } | null = null;
-  for (const tema of TEMAS) {
-    if (tema.soloAdmin && !esAdmin) continue;
-    let puntos = 0;
-    for (const clave of tema.claves) {
-      if (q.includes(` ${clave} `) || (clave.length > 3 && q.includes(clave))) puntos += clave.includes(" ") ? 2 : 1;
-    }
-    if (puntos > 0 && (!mejor || puntos > mejor.puntos)) mejor = { tema, puntos };
-  }
-  return mejor ? mejor.tema : null;
+interface Prioritario {
+  id_cliente: number;
+  nombre_cliente: string;
+  categoria: string | null;
+  dias_sin_comprar: number | null;
+  prioridad: Analisis["prioridad"];
+  titulo: string;
 }
 
 interface Mensaje {
   de: "yo" | "asistente";
   texto: string;
+  pasos?: string[];
   ir?: { etiqueta: string; ruta: string };
+  sugerencias?: { id: string; titulo: string }[];
+  analisis?: Analisis;
+  prioritarios?: Prioritario[];
+  elegirCliente?: ClienteBasico[];
+}
+
+const PRIORIDAD: Record<Analisis["prioridad"], { chip: string; etiqueta: string }> = {
+  alta: { chip: "chip chip-bad", etiqueta: "Prioridad alta" },
+  media: { chip: "chip chip-warn", etiqueta: "Prioridad media" },
+  baja: { chip: "chip chip-ok", etiqueta: "Prioridad baja" },
+  no_contactar: { chip: "chip chip-neutral", etiqueta: "No contactar" },
+};
+const CATEGORIA: Record<string, string> = { activo: "Activo", ocasional: "Ocasional", en_riesgo: "En riesgo" };
+
+const BIENVENIDA: Mensaje = {
+  de: "asistente",
+  texto:
+    "Buen día. Soy el asistente de FlowInsight. Puedo orientarle sobre cómo usar la aplicación y ayudarle a decidir " +
+    "qué hacer con un cliente: escriba, por ejemplo, \"¿qué opinas de Panadería Rojas?\" o \"¿a quién llamo primero?\". " +
+    "Respondo con los datos reales de la aplicación; no soy una inteligencia artificial generativa.",
+};
+
+const chipBtn: React.CSSProperties = {
+  minHeight: 36, background: "var(--c-primary-soft)", color: "var(--c-primary-hover)",
+  border: "1px solid var(--c-primary-line)", borderRadius: 999, padding: "0 var(--s-3)", fontSize: 13,
+  fontWeight: 600, textAlign: "left",
+};
+
+function TarjetaAnalisis({ a, onPreparar }: { a: Analisis; onPreparar: () => void }) {
+  const p = PRIORIDAD[a.prioridad];
+  const icono = (tono: Senal["tono"]) =>
+    tono === "ok" ? <CircleCheck size={15} aria-hidden="true" style={{ color: "var(--c-ok)", flexShrink: 0, marginTop: 3 }} />
+    : tono === "alerta" ? <TriangleAlert size={15} aria-hidden="true" style={{ color: "var(--c-bad)", flexShrink: 0, marginTop: 3 }} />
+    : tono === "atencion" ? <TriangleAlert size={15} aria-hidden="true" style={{ color: "var(--c-warn)", flexShrink: 0, marginTop: 3 }} />
+    : <Info size={15} aria-hidden="true" style={{ color: "var(--c-muted)", flexShrink: 0, marginTop: 3 }} />;
+  return (
+    <div style={{ marginTop: "var(--s-2)" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--s-2)", alignItems: "center", marginBottom: "var(--s-2)" }}>
+        <span className={p.chip}>{p.etiqueta}</span>
+        {a.categoria && <span className="chip chip-neutral">{CATEGORIA[a.categoria] ?? a.categoria}</span>}
+      </div>
+      <p style={{ margin: "0 0 var(--s-2)", fontWeight: 700 }}>{a.titulo}</p>
+      <p style={{ margin: "0 0 var(--s-3)" }}>{a.recomendacion}</p>
+      <p style={{ margin: "0 0 var(--s-1)", fontWeight: 600, fontSize: 13, color: "var(--c-muted)" }}>Lo que muestran sus datos</p>
+      <ul style={{ margin: "0 0 var(--s-3)", padding: 0, listStyle: "none", display: "grid", gap: 6 }}>
+        {a.senales.map((s) => (
+          <li key={s.texto} style={{ display: "flex", gap: 8, fontSize: 13 }}>
+            {icono(s.tono)}<span>{s.texto}</span>
+          </li>
+        ))}
+      </ul>
+      <p style={{ margin: "0 0 var(--s-1)", fontWeight: 600, fontSize: 13, color: "var(--c-muted)" }}>Qué haría</p>
+      <ol style={{ margin: "0 0 var(--s-3)", paddingLeft: 20, fontSize: 13 }}>
+        {a.pasos.map((x) => <li key={x} style={{ marginBottom: 4 }}>{x}</li>)}
+      </ol>
+      <p style={{ margin: "0 0 var(--s-2)", fontSize: 12, color: "var(--c-muted)" }}>
+        Confiabilidad de la lectura: {a.confianza}. {a.aviso}
+      </p>
+      {a.puede_contactar && (
+        <button type="button" className="btn btn-outline btn-sm" onClick={onPreparar} style={{ minHeight: 40 }}>
+          Preparar mensaje para este cliente
+          <ArrowRight size={14} aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  );
 }
 
 export default function Asistente() {
@@ -198,44 +117,111 @@ export default function Asistente() {
   const esAdmin = usuario?.rol === "Administrador";
   const [abierto, setAbierto] = useState(false);
   const [entrada, setEntrada] = useState("");
-  const [mensajes, setMensajes] = useState<Mensaje[]>([
-    {
-      de: "asistente",
-      texto:
-        "Hola, soy el asistente de FlowInsight. Te explico cómo usar la aplicación: escribe tu duda o toca una " +
-        "de las preguntas de abajo. (No soy una inteligencia artificial: respondo con la guía de la aplicación.)",
-    },
-  ]);
+  const [escribiendo, setEscribiendo] = useState(false);
+  const [ultimoTema, setUltimoTema] = useState<string | undefined>(undefined);
+  const [clientes, setClientes] = useState<ClienteBasico[]>([]);
+  const [mensajes, setMensajes] = useState<Mensaje[]>([BIENVENIDA]);
   const finRef = useRef<HTMLDivElement>(null);
+  const clientesCargados = useRef(false);
 
-  const sugeridas = useMemo(() => TEMAS.filter((t) => SUGERIDAS.includes(t.id)), []);
+  const iniciales = useMemo(() => TEMAS.filter((t) => SUGERIDAS.includes(t.id)), []);
+  const cabecera = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}` });
 
   useEffect(() => {
     finRef.current?.scrollIntoView({ block: "end" });
-  }, [mensajes, abierto]);
+  }, [mensajes, escribiendo, abierto]);
 
-  const responder = (pregunta: string, tema: Tema | null) => {
-    setMensajes((prev) => [
-      ...prev,
-      { de: "yo", texto: pregunta },
-      tema
-        ? { de: "asistente", texto: tema.respuesta, ir: tema.ir }
-        : {
-            de: "asistente",
-            texto:
-              "No encontré una respuesta para eso. Puedo ayudarte con: " +
-              TEMAS.filter((t) => !t.soloAdmin || esAdmin).map((t) => t.titulo).slice(0, 8).join(" · ") +
-              ". Prueba con otras palabras.",
-          },
-    ]);
+  // Los nombres de clientes se cargan una sola vez, al abrir el asistente por primera vez
+  useEffect(() => {
+    if (!abierto || clientesCargados.current || !usuario) return;
+    clientesCargados.current = true;
+    fetch(`${API_URL}/asistente/clientes`, { headers: cabecera() })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d: ClienteBasico[]) => setClientes(d))
+      .catch(() => { clientesCargados.current = false; });
+  }, [abierto, usuario]);
+
+  const agregar = (m: Mensaje) => setMensajes((prev) => [...prev, m]);
+
+  const analizarCliente = async (c: ClienteBasico) => {
+    try {
+      const r = await fetch(`${API_URL}/asistente/cliente/${c.id_cliente}`, { headers: cabecera() });
+      if (!r.ok) throw new Error();
+      const a: Analisis = await r.json();
+      agregar({ de: "asistente", texto: `Esto es lo que veo sobre ${a.nombre_cliente}:`, analisis: a });
+      setUltimoTema(undefined);
+    } catch {
+      agregar({ de: "asistente", texto: "No pude consultar los datos de ese cliente en este momento. Intente de nuevo en unos segundos." });
+    }
+  };
+
+  const mostrarPrioritarios = async () => {
+    try {
+      const r = await fetch(`${API_URL}/asistente/prioridades?limite=5`, { headers: cabecera() });
+      if (!r.ok) throw new Error();
+      const lista: Prioritario[] = await r.json();
+      agregar({
+        de: "asistente",
+        texto: lista.length
+          ? "Estos son los clientes que contactaría primero, ordenados por urgencia y por lo que compran. " +
+            "Toque uno para ver el análisis completo."
+          : "No encontré clientes con historial para priorizar.",
+        prioritarios: lista,
+      });
+    } catch {
+      agregar({ de: "asistente", texto: "No pude consultar las prioridades en este momento. Intente de nuevo en unos segundos." });
+    }
+  };
+
+  const contestar = async (pregunta: string, accion: () => Promise<void> | void) => {
+    agregar({ de: "yo", texto: pregunta });
+    setEscribiendo(true);
+    await new Promise((res) => setTimeout(res, 450)); // pausa breve: da tiempo de leer y se siente conversación
+    await accion();
+    setEscribiendo(false);
   };
 
   const enviar = (e: React.FormEvent) => {
     e.preventDefault();
     const pregunta = entrada.trim();
-    if (!pregunta) return;
+    if (!pregunta || escribiendo) return;
     setEntrada("");
-    responder(pregunta, buscar(pregunta, esAdmin));
+    contestar(pregunta, async () => {
+      const candidatos = reconocerClientes(pregunta, clientes);
+      if (candidatos.length === 1) return analizarCliente(candidatos[0]);
+      if (candidatos.length > 1) {
+        return agregar({
+          de: "asistente",
+          texto: "Encontré más de un cliente con ese nombre. ¿A cuál se refiere?",
+          elegirCliente: candidatos,
+        });
+      }
+      if (pideClientesPrioritarios(pregunta)) return mostrarPrioritarios();
+      const r: Respuesta = responder(pregunta, esAdmin, ultimoTema);
+      if (r.temaId) setUltimoTema(r.temaId);
+      agregar({ de: "asistente", ...r });
+    });
+  };
+
+  const elegirTema = (id: string, titulo: string) => {
+    if (escribiendo) return;
+    const tema = TEMAS.find((t) => t.id === id);
+    if (!tema) return;
+    contestar(titulo, () => {
+      const r = responderTema(tema, true, esAdmin);
+      setUltimoTema(tema.id);
+      agregar({ de: "asistente", ...r });
+    });
+  };
+
+  const elegirClienteAnalisis = (c: ClienteBasico) => {
+    if (escribiendo) return;
+    contestar(`¿Qué opina de ${c.nombre_cliente}?`, () => analizarCliente(c));
+  };
+
+  const irAPromociones = (id: number) => {
+    navigate(`/promotions?cliente=${id}`);
+    setAbierto(false);
   };
 
   if (!usuario) return null;
@@ -257,72 +243,113 @@ export default function Asistente() {
       {abierto && (
         <section
           role="dialog"
-          aria-label="Asistente de ayuda"
+          aria-label="Asistente de FlowInsight"
           onKeyDown={(e) => { if (e.key === "Escape") setAbierto(false); }}
-          style={{ position: "fixed", right: 16, bottom: 88, zIndex: 90, width: "min(380px, calc(100vw - 32px))",
-            height: "min(520px, calc(100vh - 112px))", background: "var(--c-surface)", borderRadius: "var(--r-lg)",
+          style={{ position: "fixed", right: 16, bottom: 88, zIndex: 90, width: "min(420px, calc(100vw - 32px))",
+            height: "min(600px, calc(100vh - 112px))", background: "var(--c-surface)", borderRadius: "var(--r-lg)",
             border: "1px solid var(--c-line-strong)", boxShadow: "var(--shadow-2)", display: "flex",
             flexDirection: "column", overflow: "hidden", fontFamily: "var(--font)" }}
         >
           <header style={{ background: "var(--c-primary)", color: "#fff", padding: "var(--s-3) var(--s-4)" }}>
-            <strong style={{ fontSize: 16 }}>Asistente FlowInsight</strong>
-            <div style={{ fontSize: 13, color: "var(--c-primary-soft)", display: "flex", alignItems: "center", gap: "var(--s-1)" }}>
-              <Info size={14} aria-hidden="true" style={{ flexShrink: 0 }} />
-              No es una IA: responde con la guía de la aplicación
+            <strong style={{ fontSize: 16 }}>Asistente de FlowInsight</strong>
+            <div style={{ fontSize: 13, color: "var(--c-primary-soft)" }}>
+              Orienta sobre la aplicación y apoya decisiones sobre clientes
             </div>
           </header>
 
-          <div style={{ flex: 1, overflowY: "auto", padding: "var(--s-3)", display: "flex", flexDirection: "column", gap: "var(--s-2)",
-            background: "var(--c-bg)" }} aria-live="polite">
+          <div style={{ flex: 1, overflowY: "auto", padding: "var(--s-3)", display: "flex", flexDirection: "column",
+            gap: "var(--s-3)", background: "var(--c-bg)" }} aria-live="polite">
             {mensajes.map((m, i) => (
-              <div key={i} style={{ alignSelf: m.de === "yo" ? "flex-end" : "flex-start", maxWidth: "88%" }}>
+              <div key={i} style={{ alignSelf: m.de === "yo" ? "flex-end" : "flex-start", maxWidth: "94%" }}>
                 <div style={{ background: m.de === "yo" ? "var(--c-primary)" : "var(--c-surface)",
                   color: m.de === "yo" ? "#fff" : "var(--c-ink)",
                   border: m.de === "yo" ? "1px solid var(--c-primary)" : "1px solid var(--c-line)",
-                  borderRadius: "var(--r-md)", padding: "var(--s-2) var(--s-3)", fontSize: 14, lineHeight: 1.5 }}>
+                  borderRadius: "var(--r-md)", padding: "var(--s-2) var(--s-3)", fontSize: 14, lineHeight: 1.55,
+                  whiteSpace: "pre-line" }}>
                   {m.texto}
+                  {m.pasos && (
+                    <ol style={{ margin: "var(--s-2) 0 0", paddingLeft: 20 }}>
+                      {m.pasos.map((p) => <li key={p} style={{ marginBottom: 4 }}>{p}</li>)}
+                    </ol>
+                  )}
+                  {m.analisis && (
+                    <div style={{ whiteSpace: "normal" }}>
+                      <TarjetaAnalisis a={m.analisis} onPreparar={() => irAPromociones(m.analisis!.id_cliente)} />
+                    </div>
+                  )}
                 </div>
                 {m.ir && (
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
+                  <button type="button" className="btn btn-outline btn-sm"
                     onClick={() => { navigate(m.ir!.ruta); setAbierto(false); }}
-                    style={{ marginTop: "var(--s-2)", minHeight: 40 }}
-                  >
+                    style={{ marginTop: "var(--s-2)", minHeight: 40 }}>
                     {m.ir.etiqueta}
                     <ArrowRight size={14} aria-hidden="true" />
                   </button>
                 )}
+                {(m.prioritarios || m.elegirCliente) && (
+                  <div style={{ marginTop: "var(--s-2)", display: "grid", gap: "var(--s-2)" }}>
+                    {(m.prioritarios ?? m.elegirCliente!.map((c) => ({
+                      id_cliente: c.id_cliente, nombre_cliente: c.nombre_cliente, categoria: null,
+                      dias_sin_comprar: null, prioridad: "media" as const, titulo: "",
+                    }))).map((c) => (
+                      <button key={c.id_cliente} type="button" onClick={() => elegirClienteAnalisis(c)}
+                        style={{ ...chipBtn, borderRadius: "var(--r-md)", padding: "var(--s-2) var(--s-3)", width: "100%" }}>
+                        <span style={{ display: "block" }}>{c.nombre_cliente}</span>
+                        {c.dias_sin_comprar !== null && (
+                          <span style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--c-muted)" }}>
+                            {CATEGORIA[c.categoria ?? ""] ?? ""} · {c.dias_sin_comprar} días sin comprar · {PRIORIDAD[c.prioridad].etiqueta.toLowerCase()}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {m.sugerencias && m.sugerencias.length > 0 && (
+                  <div style={{ marginTop: "var(--s-2)", display: "flex", flexWrap: "wrap", gap: "var(--s-2)" }}>
+                    {m.sugerencias.map((s) => (
+                      <button key={s.id} type="button" onClick={() => elegirTema(s.id, s.titulo)} style={chipBtn}>
+                        {s.titulo}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
+            {escribiendo && (
+              <div role="status" style={{ alignSelf: "flex-start", fontSize: 13, color: "var(--c-muted)",
+                padding: "var(--s-1) var(--s-3)" }}>
+                Analizando…
+              </div>
+            )}
             <div ref={finRef} />
           </div>
 
-          <div style={{ padding: "var(--s-2) var(--s-3) 0", display: "flex", gap: "var(--s-2)", overflowX: "auto" }}>
-            {sugeridas.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => responder(t.titulo, t)}
-                style={{ flexShrink: 0, minHeight: 40, background: "var(--c-primary-soft)", color: "var(--c-primary-hover)",
-                  border: "1px solid var(--c-primary-line)", borderRadius: 999, padding: "0 var(--s-3)",
-                  fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                {t.titulo}
+          {mensajes.length === 1 && (
+            <div style={{ padding: "var(--s-2) var(--s-3) 0", display: "flex", gap: "var(--s-2)", overflowX: "auto" }}>
+              <button type="button" onClick={() => contestar("¿A quién llamo primero?", mostrarPrioritarios)}
+                style={{ ...chipBtn, flexShrink: 0, minHeight: 40, whiteSpace: "nowrap" }}>
+                ¿A quién llamo primero?
               </button>
-            ))}
-          </div>
+              {iniciales.map((t) => (
+                <button key={t.id} type="button" onClick={() => elegirTema(t.id, t.titulo)}
+                  style={{ ...chipBtn, flexShrink: 0, minHeight: 40, whiteSpace: "nowrap" }}>
+                  {t.titulo}
+                </button>
+              ))}
+            </div>
+          )}
 
           <form onSubmit={enviar} style={{ display: "flex", gap: "var(--s-2)", padding: "var(--s-3)" }}>
             <input
               className="input"
               value={entrada}
               onChange={(e) => setEntrada(e.target.value)}
-              placeholder="Escribe tu duda..."
-              aria-label="Escribe tu duda"
+              placeholder="Pregunte o nombre un cliente…"
+              aria-label="Escriba su pregunta o el nombre de un cliente"
+              autoComplete="off"
               style={{ flex: 1, minWidth: 0 }}
             />
-            <button type="submit" className="btn btn-primary" style={{ flexShrink: 0 }}>
+            <button type="submit" className="btn btn-primary" disabled={escribiendo} style={{ flexShrink: 0 }}>
               <Send size={16} aria-hidden="true" />
               Enviar
             </button>

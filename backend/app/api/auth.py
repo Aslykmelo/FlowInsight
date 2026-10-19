@@ -50,7 +50,9 @@ def _enviar_codigo(usuario: Usuario, codigo: str) -> str | None:
             return "sms"
         logger.warning("Fallo el SMS de recuperación del usuario %s; se intenta por correo", usuario.id_usuario)
 
-    asunto, html, texto = correo_codigo(usuario.nombre_usuario, codigo, settings.recovery_code_minutes)
+    asunto, html, texto = correo_codigo(
+        usuario.nombre_usuario, codigo, settings.recovery_code_minutes, correo=usuario.correo, solicitado=datetime.utcnow()
+    )
     if enviar_correo(usuario.correo, asunto, html, texto):
         return "correo"
     return None

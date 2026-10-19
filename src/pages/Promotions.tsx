@@ -10,10 +10,17 @@ interface ClientePromocion {
   categoria: "activo" | "ocasional" | "en_riesgo";
 }
 
+interface AccionPromocion {
+  etiqueta: string;
+  url: string;
+  tipo: "asesor" | "pedido";
+}
+
 interface MensajePromocion extends ClientePromocion {
   producto_favorito: string | null;
   mensaje: string;
   link_whatsapp: string | null;
+  acciones: AccionPromocion[];
 }
 
 const CATEGORIA_STYLE: Record<ClientePromocion["categoria"], { color: string; bg: string; label: string }> = {
@@ -39,6 +46,8 @@ export default function Promotions() {
   const [mensaje, setMensaje] = useState<MensajePromocion | null>(null);
   const [cargandoMensaje, setCargandoMensaje] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -58,6 +67,7 @@ export default function Promotions() {
     setSeleccionado(id);
     setMensaje(null);
     setCopiado(false);
+    setAviso(null);
     setCargandoMensaje(true);
     const token = localStorage.getItem("token");
     fetch(`${API_URL}/promociones/mensaje/${id}`, {
@@ -77,6 +87,32 @@ export default function Promotions() {
     await navigator.clipboard.writeText(mensaje.mensaje);
     setCopiado(true);
     setTimeout(() => setCopiado(false), 2000);
+  };
+
+  const enviarVistaPrevia = async () => {
+    if (!mensaje) return;
+    setEnviando(true);
+    setAviso(null);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_URL}/promociones/mensaje/${mensaje.id_cliente}/enviar-correo`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ destino: "mi_correo" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail ?? "No se pudo enviar el correo");
+      setAviso({
+        ok: true,
+        texto: data.modo === "real"
+          ? `Vista previa enviada a ${data.destino}. Revisa tu bandeja de entrada.`
+          : "El servidor no tiene un proveedor de correo configurado: el mensaje quedó solo en el registro del servidor.",
+      });
+    } catch (err) {
+      setAviso({ ok: false, texto: err instanceof Error ? err.message : "No se pudo enviar el correo" });
+    } finally {
+      setEnviando(false);
+    }
   };
 
   const clientesFiltrados = clientes.filter((c) => filtro === "todos" || c.categoria === filtro);
@@ -210,7 +246,35 @@ export default function Promotions() {
                     borderRadius: 8, padding: 10, color: "#333", boxSizing: "border-box" }}
                 />
 
-                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <div style={{ marginTop: 14 }}>
+                  <p style={{ margin: "0 0 6px", fontSize: 12, color: "#888" }}>
+                    Botones que verá el cliente en el mensaje
+                  </p>
+                  {mensaje.acciones.length > 0 ? (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {mensaje.acciones.map((a, i) => (
+                        <a
+                          key={a.tipo}
+                          href={a.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ background: i === 0 ? "#534AB7" : "#fff", color: i === 0 ? "#fff" : "#534AB7",
+                            border: "1px solid #534AB7", borderRadius: 8, padding: "8px 14px", fontSize: 13,
+                            fontWeight: 600, textDecoration: "none" }}
+                        >
+                          {a.etiqueta}
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 12, color: "#BA7517", lineHeight: 1.5 }}>
+                      Aún no hay botones: configura el WhatsApp de la empresa (EMPRESA_WHATSAPP) o el enlace de
+                      pedidos (EMPRESA_PEDIDO_URL) en el servidor.
+                    </p>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
                   <button
                     onClick={copiarMensaje}
                     style={{ flex: 1, background: copiado ? "#0F6E56" : "#534AB7", color: "#fff",
@@ -232,6 +296,26 @@ export default function Promotions() {
                     </a>
                   )}
                 </div>
+
+                <button
+                  onClick={enviarVistaPrevia}
+                  disabled={enviando}
+                  style={{ width: "100%", marginTop: 8, background: "#fff", color: "#534AB7",
+                    border: "1px solid #534AB7", borderRadius: 8, padding: "9px 0",
+                    cursor: enviando ? "default" : "pointer", fontSize: 13, opacity: enviando ? 0.6 : 1 }}
+                >
+                  {enviando ? "Enviando..." : "Enviarme una vista previa por correo"}
+                </button>
+                {aviso && (
+                  <p role="status" style={{ margin: "8px 0 0", fontSize: 12, lineHeight: 1.5,
+                    color: aviso.ok ? "#0F6E56" : "#993C1D" }}>
+                    {aviso.texto}
+                  </p>
+                )}
+                <p style={{ margin: "10px 0 0", fontSize: 11, color: "#999", lineHeight: 1.5 }}>
+                  El correo con botones se envía a tu cuenta para revisarlo. El envío directo al cliente está
+                  desactivado por defecto y solo aplica a clientes que autorizaron el uso de sus datos.
+                </p>
               </>
             )}
           </div>

@@ -29,7 +29,7 @@ const COLOR_SEGMENTO: Record<string, string> = {
 };
 
 // Color de cada eje (se repite en las etiquetas de la escena y en las píldoras).
-const COLOR_EJE = { tiempo: "#1f5fd1", producto: "#534ab7", segmento: "#3d4654" };
+const COLOR_EJE = { tiempo: "#1f5fd1", producto: "#1e40af", segmento: "#3d4654" };
 
 const LABEL_SEGMENTO: Record<string, string> = {
   activo: "Activo",
@@ -255,7 +255,7 @@ const entero = new Intl.NumberFormat("es-CO");
 
 type Medida = "ingresos" | "cantidad";
 
-// Escala de la tabla de calor en 6 pasos de morado. Cada paso tiene un texto (oscuro o blanco)
+// Escala de la tabla de calor en 6 pasos de azul. Cada paso tiene un texto (oscuro o blanco)
 // con contraste de al menos 4.5:1; por eso la escala es escalonada y no continua.
 const NIVELES_CALOR = [
   { hasta: 0.1, t: 0.12, claro: true },
@@ -265,8 +265,8 @@ const NIVELES_CALOR = [
   { hasta: 0.85, t: 0.88, claro: false },
   { hasta: Infinity, t: 1, claro: false },
 ];
-const mezclaMorado = (t: number) =>
-  `rgb(${Math.round(255 - (255 - 83) * t)}, ${Math.round(255 - (255 - 74) * t)}, ${Math.round(255 - (255 - 183) * t)})`;
+const mezclaAzul = (t: number) =>
+  `rgb(${Math.round(255 - (255 - 30) * t)}, ${Math.round(255 - (255 - 64) * t)}, ${Math.round(255 - (255 - 175) * t)})`;
 const nivelCalor = (ratio: number) => NIVELES_CALOR.find((n) => ratio <= n.hasta) ?? NIVELES_CALOR[NIVELES_CALOR.length - 1];
 
 function TablaCalor({
@@ -290,7 +290,7 @@ function TablaCalor({
 
   return (
     <div className="table-scroll">
-      <table style={{ borderCollapse: "separate", borderSpacing: 3, width: "100%", minWidth: 760, fontVariantNumeric: "tabular-nums" }}>
+      <table style={{ borderCollapse: "separate", borderSpacing: 3, width: "100%", minWidth: 880, fontVariantNumeric: "tabular-nums" }}>
         <caption style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
           Tabla de calor: {medida === "ingresos" ? "ingresos" : "unidades vendidas"} por producto y mes
         </caption>
@@ -324,10 +324,10 @@ function TablaCalor({
                         aria-label={`${p}, ${m}: ${formato(v)}`}
                         aria-pressed={elegido}
                         style={{
-                          width: "100%", minHeight: 40, border: elegido ? "2px solid var(--c-ink)" : "2px solid transparent",
+                          width: "100%", minWidth: 58, minHeight: 40, whiteSpace: "nowrap", border: elegido ? "2px solid var(--c-ink)" : "2px solid transparent",
                           borderRadius: 6, cursor: v ? "pointer" : "default", fontSize: 12, fontWeight: 600,
                           fontVariantNumeric: "tabular-nums",
-                          background: v ? mezclaMorado(nivel.t) : "var(--c-bg)",
+                          background: v ? mezclaAzul(nivel.t) : "var(--c-bg)",
                           color: v ? (nivel.claro ? "var(--c-ink)" : "#fff") : "var(--c-muted)",
                         }}
                       >
@@ -606,7 +606,7 @@ export default function OlapCube() {
                     fontSize: 12, color: "var(--c-muted)" }}>
                     <span>Menos</span>
                     {NIVELES_CALOR.map((n) => (
-                      <span key={n.t} aria-hidden="true" style={{ width: 24, height: 12, borderRadius: 3, background: mezclaMorado(n.t) }} />
+                      <span key={n.t} aria-hidden="true" style={{ width: 24, height: 12, borderRadius: 3, background: mezclaAzul(n.t) }} />
                     ))}
                     <span>Más {medida === "ingresos" ? "ingresos" : "unidades"}</span>
                   </div>

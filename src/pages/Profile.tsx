@@ -7,16 +7,16 @@ import { updateMe, changePassword, getActividad, mensajeDeError, type ActividadU
 
 // Colores de la paleta de marca; todos dan contraste >= 4.5:1 con la inicial en blanco.
 const COLORES_AVATAR = [
-  { valor: "#534AB7", nombre: "Morado" },
+  { valor: "#1E40AF", nombre: "Azul de marca" },
   { valor: "#0F6E56", nombre: "Verde" },
-  { valor: "#1F5FD1", nombre: "Azul" },
+  { valor: "#0369A1", nombre: "Celeste" },
   { valor: "#8A5208", nombre: "Ámbar" },
   { valor: "#A33A1E", nombre: "Rojo" },
-  { valor: "#1B2430", nombre: "Oscuro" },
+  { valor: "#0F172A", nombre: "Oscuro" },
 ];
 
 // Tonos que se guardaban antes de unificar la paleta, para no perder la elección de quien ya eligió uno.
-const COLOR_ANTERIOR: Record<string, string> = { "#2F6FED": "#1F5FD1", "#BA7517": "#8A5208", "#993C1D": "#A33A1E" };
+const COLOR_ANTERIOR: Record<string, string> = { "#534AB7": "#1E40AF", "#1F5FD1": "#0369A1", "#2F6FED": "#0369A1", "#BA7517": "#8A5208", "#993C1D": "#A33A1E", "#1B2430": "#0F172A" };
 
 const leerColor = (id: number | undefined) => {
   try {

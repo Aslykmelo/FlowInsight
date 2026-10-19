@@ -1,32 +1,32 @@
 /* ============================================================
    Sistema de diseño de FlowInsight
-   Identidad: se conserva el morado del proyecto (ya aparece en los documentos de la
-   tesis) y se agrega un ámbar "yema" como acento, propio de una distribuidora de
-   huevos, pollo y frutos secos. Neutros cálidos, tipografía Plus Jakarta Sans.
+   Identidad: un solo acento azul para acciones y selección (contenido, de aplicación de trabajo),
+   ámbar "yema" solo como color de datos y avisos, y neutros fríos de una sola familia.
+   Tipografía Fira Sans, pensada para tableros y cifras.
    Todas las pantallas deben usar estas variables y clases en vez de colores sueltos.
    ============================================================ */
 
 :root {
   /* Marca */
-  --c-primary: #534ab7;
-  --c-primary-hover: #453da0;
-  --c-primary-soft: #efedfa;
-  --c-primary-line: #d9d5f3;
-  --c-accent: #e8a33d;
-  --c-accent-soft: #fdf3df;
+  --c-primary: #1e40af;
+  --c-primary-hover: #1e3a8a;
+  --c-primary-soft: #eef3fd;
+  --c-primary-line: #d3dff7;
+  --c-accent: #f59e0b;
+  --c-accent-soft: #fef3c7;
 
   /* Neutros */
-  --c-ink: #1b2430;
-  --c-ink-2: #3d4654;
-  --c-muted: #5b6472;
-  --c-faint: #8a92a0;
-  --c-line: #e6e8ee;
-  --c-line-strong: #d3d7e0;
-  --c-bg: #f6f7fb;
+  --c-ink: #0f172a;
+  --c-ink-2: #334155;
+  --c-muted: #475569;
+  --c-faint: #64748b;
+  --c-line: #e2e8f0;
+  --c-line-strong: #cbd5e1;
+  --c-bg: #f8fafc;
   --c-surface: #ffffff;
-  --c-sidebar: #16152e;
-  --c-sidebar-line: #2a2950;
-  --c-sidebar-text: #a9a8c8;
+  --c-sidebar: #0f172a;
+  --c-sidebar-line: #1e293b;
+  --c-sidebar-text: #94a3b8;
 
   /* Estados (texto sobre fondo suave, contraste AA) */
   --c-ok: #0f6e56;
@@ -35,8 +35,8 @@
   --c-warn-soft: #fbefd9;
   --c-bad: #a33a1e;
   --c-bad-soft: #faece7;
-  --c-info: #1f5fd1;
-  --c-info-soft: #e8f0fd;
+  --c-info: #0369a1;
+  --c-info-soft: #e0f2fe;
 
   /* Forma y profundidad */
   --r-sm: 8px;
@@ -53,7 +53,7 @@
   --s-5: 24px;
   --s-6: 32px;
 
-  --font: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font: "Fira Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 html {
@@ -126,7 +126,6 @@ button, input, select, textarea {
   background: var(--c-surface);
   border: 1px solid var(--c-line);
   border-radius: var(--r-md);
-  box-shadow: var(--shadow-1);
   padding: var(--s-5);
 }
 .card h2 {
@@ -138,15 +137,12 @@ button, input, select, textarea {
   background: var(--c-surface);
   border: 1px solid var(--c-line);
   border-radius: var(--r-md);
-  box-shadow: var(--shadow-1);
   padding: var(--s-4) var(--s-5);
 }
 .kpi-label {
   margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--c-muted);
 }
 .kpi-value {
@@ -235,12 +231,10 @@ button, input, select, textarea {
 .table th {
   padding: 10px var(--s-3);
   text-align: left;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--c-muted);
-  background: #fafbfd;
+  background: #f8fafc;
   border-bottom: 1px solid var(--c-line);
   white-space: nowrap;
 }
@@ -251,7 +245,7 @@ button, input, select, textarea {
 }
 .table th:first-child, .table td:first-child { padding-left: var(--s-4); }
 .table th:last-child, .table td:last-child { padding-right: var(--s-4); }
-.table tbody tr:hover { background: #fafaff; }
+.table tbody tr:hover { background: var(--c-primary-soft); }
 .table .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---------- Mensajes ---------- */
@@ -300,3 +294,12 @@ button, input, select, textarea {
 .leaflet-container { isolation: isolate; font-family: var(--font); }
 /* Controles de zoom con área táctil de 40 px */
 .leaflet-bar a, .leaflet-bar a:hover { width: 40px; height: 40px; line-height: 40px; font-size: 18px; }
+
+/* ---------- Superficies del navegador (lo que no se dibuja) ---------- */
+::selection { background: var(--c-primary-line); color: var(--c-ink); }
+input, textarea, select { caret-color: var(--c-primary); accent-color: var(--c-primary); }
+* { scrollbar-width: thin; scrollbar-color: var(--c-line-strong) transparent; }
+.sidebar { scrollbar-color: var(--c-sidebar-line) transparent; }
+table, .kpi-value, .num, td, th { font-variant-numeric: tabular-nums; }
+button, a, summary, [role="button"], select, label[for], input[type="checkbox"], input[type="radio"] { cursor: pointer; }
+button:disabled { cursor: not-allowed; }

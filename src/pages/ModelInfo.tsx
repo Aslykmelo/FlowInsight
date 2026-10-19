@@ -17,12 +17,12 @@ const DESCRIPCION_VARIABLE: Record<string, string> = {
 
 const pct = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(1)} %`);
 
-const PASOS: { icono: LucideIcon; titulo: string; texto: string; fondo: string; color: string }[] = [
-  { icono: Database, titulo: "Historial", texto: "Pedidos de cada cliente: fechas, montos y productos.", fondo: "var(--c-info-soft)", color: "var(--c-info)" },
-  { icono: Calculator, titulo: "Variables", texto: "Se resume el comportamiento: cuándo, cuánto y cada cuánto compra.", fondo: "var(--c-primary-soft)", color: "var(--c-primary)" },
-  { icono: Brain, titulo: "Modelos", texto: "Uno estima la próxima compra y otro la probabilidad de abandono.", fondo: "var(--c-ok-soft)", color: "var(--c-ok)" },
-  { icono: Gauge, titulo: "Riesgo", texto: "Cada cliente queda en riesgo bajo, medio o alto.", fondo: "var(--c-warn-soft)", color: "var(--c-warn)" },
-  { icono: Target, titulo: "Acción", texto: "Alertas, mensajes de promoción y reportes para el equipo comercial.", fondo: "var(--c-bad-soft)", color: "var(--c-bad)" },
+const PASOS: { icono: LucideIcon; titulo: string; texto: string }[] = [
+  { icono: Database, titulo: "Historial", texto: "Pedidos de cada cliente: fechas, montos y productos." },
+  { icono: Calculator, titulo: "Variables", texto: "Se resume el comportamiento: cuándo, cuánto y cada cuánto compra." },
+  { icono: Brain, titulo: "Modelos", texto: "Uno estima la próxima compra y otro la probabilidad de abandono." },
+  { icono: Gauge, titulo: "Riesgo", texto: "Cada cliente queda en riesgo bajo, medio o alto." },
+  { icono: Target, titulo: "Acción", texto: "Alertas, mensajes de promoción y reportes para el equipo comercial." },
 ];
 
 export default function ModelInfo() {
@@ -67,13 +67,14 @@ export default function ModelInfo() {
           <section className="card">
             <h2>El recorrido, paso a paso</h2>
             <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--s-3)",
-              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))" }}>
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))", columnGap: "var(--s-5)", rowGap: "var(--s-5)" }}>
               {PASOS.map((p, i) => (
-                <li key={p.titulo} style={{ background: p.fondo, borderRadius: "var(--r-md)", padding: "var(--s-4)" }}>
-                  <span aria-hidden="true" style={{ display: "inline-flex", color: p.color }}>
-                    <p.icono size={24} />
-                  </span>
-                  <p style={{ margin: "var(--s-2) 0 var(--s-1)", fontSize: 14, fontWeight: 700, color: "var(--c-ink)" }}>
+                <li key={p.titulo} style={{ borderTop: "2px solid var(--c-primary)", paddingTop: "var(--s-3)" }}>
+                  <p style={{ margin: "0 0 var(--s-1)", display: "flex", alignItems: "center", gap: "var(--s-2)",
+                    fontSize: 14, fontWeight: 700, color: "var(--c-ink)" }}>
+                    <span aria-hidden="true" style={{ display: "inline-flex", color: "var(--c-primary)" }}>
+                      <p.icono size={20} />
+                    </span>
                     <span style={{ fontVariantNumeric: "tabular-nums" }}>{i + 1}.</span> {p.titulo}
                   </p>
                   <p style={{ margin: 0, fontSize: 13, color: "var(--c-ink-2)", lineHeight: 1.5 }}>{p.texto}</p>
@@ -229,29 +230,25 @@ export default function ModelInfo() {
 function Medidor({ titulo, valor, meta, explicacion }: {
   titulo: string; valor: number | null; meta?: number; explicacion: string;
 }) {
-  const radio = 38;
-  const circunferencia = 2 * Math.PI * radio;
   const fraccion = valor === null ? 0 : Math.max(0, Math.min(1, valor));
   const bajoMeta = meta !== undefined && valor !== null && valor < meta;
-  const color = bajoMeta ? "var(--c-warn)" : "var(--c-primary)";
   return (
-    <div style={{ border: "1px solid var(--c-line)", borderRadius: "var(--r-md)", padding: "var(--s-4)", textAlign: "center" }}>
-      <svg width="104" height="104" viewBox="0 0 104 104" role="img"
-        aria-label={`${titulo}: ${valor === null ? "sin dato" : pct(valor)}${meta !== undefined ? `, meta ${pct(meta)}` : ""}`}>
-        <circle cx="52" cy="52" r={radio} fill="none" strokeWidth="10" style={{ stroke: "var(--c-primary-soft)" }} />
-        <circle cx="52" cy="52" r={radio} fill="none" strokeWidth="10" strokeLinecap="round"
-          style={{ stroke: color }}
-          strokeDasharray={`${fraccion * circunferencia} ${circunferencia}`} transform="rotate(-90 52 52)" />
+    <div style={{ border: "1px solid var(--c-line)", borderRadius: "var(--r-md)", padding: "var(--s-4)" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "var(--s-3)" }}>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{titulo}</p>
+        <p style={{ margin: 0, fontSize: 24, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+          {valor === null ? "—" : pct(valor)}
+        </p>
+      </div>
+      <div role="img" aria-label={`${titulo}: ${valor === null ? "sin dato" : pct(valor)}${meta !== undefined ? `, meta ${pct(meta)}` : ""}`}
+        style={{ position: "relative", height: 10, margin: "var(--s-3) 0", borderRadius: 5, background: "var(--c-primary-soft)" }}>
+        <div style={{ width: `${fraccion * 100}%`, height: "100%", borderRadius: 5,
+          background: bajoMeta ? "var(--c-accent)" : "var(--c-primary)" }} />
         {meta !== undefined && (
-          <line x1="52" y1="6" x2="52" y2="18" strokeWidth="2" style={{ stroke: "var(--c-ink)" }}
-            transform={`rotate(${meta * 360} 52 52)`} />
+          <div aria-hidden="true" style={{ position: "absolute", top: -3, bottom: -3, left: `${meta * 100}%`, width: 2,
+            background: "var(--c-ink)" }} />
         )}
-        <text x="52" y="58" textAnchor="middle" fontSize="19" fontWeight="700"
-          style={{ fill: "var(--c-ink)", fontVariantNumeric: "tabular-nums" }}>
-          {valor === null ? "—" : `${Math.round(valor * 100)}%`}
-        </text>
-      </svg>
-      <p style={{ margin: "var(--s-1) 0", fontSize: 14, fontWeight: 700 }}>{titulo}</p>
+      </div>
       {meta !== undefined && (
         <p style={{ margin: "0 0 var(--s-1)", fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums",
           color: bajoMeta ? "var(--c-warn)" : "var(--c-ok)" }}>

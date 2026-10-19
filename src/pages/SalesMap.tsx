@@ -55,7 +55,7 @@ const entero = new Intl.NumberFormat("es-CO");
 
 // Colores de la paleta para los marcadores (Leaflet los escribe como atributos SVG, por eso van en hex).
 // "texto" es la variable CSS legible sobre fondo claro, para el texto de popups y ranking.
-const PALETA = { ok: "#0f6e56", ocasional: "#e8a33d", riesgo: "#a33a1e", primary: "#534ab7", ink: "#1b2430" };
+const PALETA = { ok: "#0f6e56", ocasional: "#e8a33d", riesgo: "#a33a1e", primary: "#1e40af", ink: "#1b2430" };
 
 // Estado del cliente (mismos umbrales que Promociones: 30 y 90 días).
 const estadoDe = (dias: number) =>
@@ -109,7 +109,7 @@ export default function SalesMap() {
   const radioLocalidad = (ing: number) => 8 + Math.sqrt(ing / maxIngresosLoc) * 32;
   const colorLocalidad = (ing: number) => {
     const i = ing / maxIngresosLoc;
-    return i > 0.66 ? "#534ab7" : i > 0.33 ? "#7c74d6" : "#b7b2ea";
+    return i > 0.66 ? "#1e40af" : i > 0.33 ? "#4f7bd9" : "#a9c1f0";
   };
 
   const totalIngresos = clientes.reduce(
@@ -163,7 +163,7 @@ export default function SalesMap() {
             </div>
           ) : (
             <>
-              <div className="grid-auto" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "var(--s-4)" }}>
+              <div className="grid-auto" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))", gap: "var(--s-4)" }}>
                 {kpi(producto ? `Ingresos de ${producto}` : "Ingresos de los clientes", formatoCOP.format(totalIngresos))}
                 {kpi("Clientes en el mapa", entero.format(clientes.length))}
                 {kpi("Localidad líder", localidadTop?.localidad ?? "—")}

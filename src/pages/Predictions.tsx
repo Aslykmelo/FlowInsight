@@ -45,7 +45,7 @@ interface ApiPrediccion {
 }
 
 // Colores de gráficos: salen de la paleta del sistema de diseño.
-const COLOR = { primary: "#534ab7", grid: "#e6e8ee", axis: "#5b6472" };
+const COLOR = { primary: "#1e40af", grid: "#e2e8f0", axis: "#475569" };
 
 const formatoCompacto = (v: number) => {
   const n = Number(v);
@@ -83,7 +83,7 @@ const ESTILOS = `
   .pred-alerts { display: flex; gap: var(--s-3); overflow-x: auto; padding: var(--s-1) var(--s-1) var(--s-2); margin: 0 calc(-1 * var(--s-1)); }
   .pred-alert-card {
     flex: 0 0 220px; text-align: left; font: inherit; cursor: pointer;
-    background: var(--c-surface); border: 1px solid var(--c-line); border-left: 4px solid var(--c-bad);
+    background: var(--c-surface); border: 1px solid var(--c-bad);
     border-radius: var(--r-md); padding: var(--s-3) var(--s-4); min-height: 40px;
   }
   .pred-alert-card:hover { background: var(--c-bad-soft); }
@@ -189,7 +189,7 @@ function DetallePrediccion({ prediction, onClose }: { prediction: Prediction; on
                   <YAxis tick={{ fontSize:12, fill:COLOR.axis }} width={84} tickFormatter={formatoCompacto} />
                   <Tooltip contentStyle={{ borderRadius:8, border:"1px solid #e6e8ee", fontSize:13 }}
                     formatter={(v: any) => [`$${Number(v).toLocaleString("es-CO")}`, "Monto"]} />
-                  <Line type="monotone" dataKey="monto" stroke={COLOR.primary} strokeWidth={3} dot={{ r:4 }} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="monto" stroke={COLOR.primary} strokeWidth={3} dot={{ r:4 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

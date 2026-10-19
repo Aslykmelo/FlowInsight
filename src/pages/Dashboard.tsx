@@ -66,7 +66,7 @@ const NOMBRES_MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oc
 
 // Colores de gráficos: salen de la paleta del sistema de diseño (design.css).
 const COLOR = {
-  primary: "#534ab7",
+  primary: "#1e40af",
   accent: "#e8a33d",
   ok: "#0f6e56",
   bad: "#a33a1e",
@@ -582,7 +582,7 @@ export default function Dashboard() {
                               <YAxis tick={TICK} width={88} tickFormatter={formatoCompacto} />
                               <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: any) => [formatoMoneda(Number(v)), name]} />
                               <Legend wrapperStyle={{ fontSize: 13 }} />
-                              <Line type="monotone" dataKey="ventas" stroke={COLOR.primary} strokeWidth={3} dot={{ r:4 }} name="Ventas reales" />
+                              <Line isAnimationActive={false} type="monotone" dataKey="ventas" stroke={COLOR.primary} strokeWidth={3} dot={{ r:4 }} name="Ventas reales" />
                             </LineChart>
                           </ResponsiveContainer>
                         </ChartBox>
@@ -602,7 +602,7 @@ export default function Dashboard() {
                               <XAxis dataKey="mes" tick={TICK} minTickGap={4} />
                               <YAxis tick={TICK} width={88} tickFormatter={formatoCompacto} />
                               <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [formatoMoneda(Number(v)), "Ventas"]} />
-                              <Bar dataKey="ventas" fill={COLOR.primary} radius={[4,4,0,0]} />
+                              <Bar isAnimationActive={false} dataKey="ventas" fill={COLOR.primary} radius={[4,4,0,0]} />
                             </BarChart>
                           </ResponsiveContainer>
                         </ChartBox>
@@ -620,7 +620,7 @@ export default function Dashboard() {
                               <XAxis dataKey="mes" tick={TICK} minTickGap={4} />
                               <YAxis tick={TICK} width={88} tickFormatter={formatoCompacto} />
                               <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [formatoMoneda(Number(v)), "Acumulado"]} />
-                              <Area type="monotone" dataKey="acumulado" stroke={COLOR.primary} strokeWidth={3} fill={COLOR.primary} fillOpacity={0.12} />
+                              <Area isAnimationActive={false} type="monotone" dataKey="acumulado" stroke={COLOR.primary} strokeWidth={3} fill={COLOR.primary} fillOpacity={0.12} />
                             </AreaChart>
                           </ResponsiveContainer>
                         </ChartBox>
@@ -648,7 +648,7 @@ export default function Dashboard() {
                             <YAxis type="category" dataKey="nombre_cliente" width={170} tick={TICK}
                               tickFormatter={(v) => recortar(String(v), 24)} />
                             <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [formatoMoneda(Number(v)), "Monto"]} />
-                            <Bar dataKey="monto_total" fill={COLOR.primary} radius={[0,4,4,0]} />
+                            <Bar isAnimationActive={false} dataKey="monto_total" fill={COLOR.primary} radius={[0,4,4,0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </ChartBox>
@@ -677,7 +677,7 @@ export default function Dashboard() {
                             <div style={{ maxWidth:220, margin:"0 auto" }}>
                               <ResponsiveContainer width="100%" height={200}>
                                 <PieChart>
-                                  <Pie data={RIESGO_PIE_DATA} dataKey="value" nameKey="name" innerRadius={55} outerRadius={80}
+                                  <Pie isAnimationActive={false} data={RIESGO_PIE_DATA} dataKey="value" nameKey="name" innerRadius={55} outerRadius={80}
                                     paddingAngle={2} stroke="#ffffff" strokeWidth={2}>
                                     {RIESGO_PIE_DATA.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                                   </Pie>
@@ -722,7 +722,7 @@ export default function Dashboard() {
                               <XAxis dataKey="ciudad" tick={TICK} />
                               <YAxis tick={TICK} allowDecimals={false} />
                               <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} clientes`, "Clientes"]} />
-                              <Bar dataKey="cantidad" fill={COLOR.primary} radius={[4,4,0,0]} />
+                              <Bar isAnimationActive={false} dataKey="cantidad" fill={COLOR.primary} radius={[4,4,0,0]} />
                             </BarChart>
                           </ResponsiveContainer>
                         </ChartBox>

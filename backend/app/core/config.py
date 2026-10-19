@@ -21,6 +21,25 @@ class Settings(BaseSettings):
     recovery_code_max_attempts: int = 5
     recovery_code_resend_seconds: int = 60
 
+    # Correo saliente (recuperacion de contrasena y mensajes de promocion).
+    # email_provider="consola": el correo solo se escribe en el log (desarrollo).
+    # "resend": envia por la API HTTPS de Resend (recomendado en Railway, que suele bloquear SMTP).
+    # "smtp": envia por un servidor SMTP propio (smtp_*).
+    email_provider: str = "consola"
+    resend_api_key: str = ""
+    email_from: str = "FlowInsight <no-reply@flowinsight.app>"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+
+    # Datos de la empresa que aparecen en correos y mensajes de promocion.
+    empresa_nombre: str = "W&T Food S.A.S."
+    empresa_whatsapp: str = ""      # solo digitos con indicativo, p. ej. 573001234567
+    empresa_pedido_url: str = ""    # catalogo o formulario de pedido; si esta vacio se usa WhatsApp
+    # Por seguridad, los correos de promocion solo salen hacia clientes reales si esto es true.
+    promo_envio_real: bool = False
+
     class Config:
         env_file = ".env"
 

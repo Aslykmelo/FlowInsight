@@ -1,4 +1,3 @@
-from datetime import datetime
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -6,6 +5,7 @@ from app.db.session import get_db
 from app.models.models import Cliente, Pedido
 from app.schemas.clientes import ClienteCreate, ClienteOut, ClienteResumen
 from app.core.dependencies import get_current_user
+from app.core.segmentos import categorizar, dias_sin_comprar_de
 
 router = APIRouter(prefix="/clientes", tags=["clientes"])
 
@@ -61,16 +61,8 @@ def listar_clientes_resumen(
             if diffs:
                 intervalo_promedio = round(sum(diffs) / len(diffs))
 
-        if not ultima_compra:
-            estado = "inactivo"
-        else:
-            dias_desde_ultima = (datetime.now() - ultima_compra).days
-            if dias_desde_ultima <= 15:
-                estado = "activo"
-            elif dias_desde_ultima <= 30:
-                estado = "en riesgo"
-            else:
-                estado = "inactivo"
+        dias_sin_comprar = dias_sin_comprar_de(ultima_compra)
+        estado = "sin_pedidos" if dias_sin_comprar is None else categorizar(dias_sin_comprar)
 
         resultado.append({
             "id_cliente": cliente.id_cliente,
@@ -85,6 +77,7 @@ def listar_clientes_resumen(
             "ultima_compra": ultima_compra,
             "intervalo_promedio": intervalo_promedio,
             "estado": estado,
+            "dias_sin_comprar": dias_sin_comprar,
         })
 
     return resultado

@@ -69,3 +69,44 @@ def test_cubo_olap_tiene_las_tres_dimensiones(client_sin_transaccion, headers_ad
     assert set(cuerpo["segmentos"]) == {"activo", "ocasional", "en_riesgo"}
     assert len(cuerpo["meses"]) > 0
     assert len(cuerpo["celdas"]) > 0
+
+
+# ----------------------------------------------------------------- mapa de clientes y productos
+def test_mapa_clientes_devuelve_puntos_con_producto_y_marca_aproximada(client_sin_transaccion, headers_admin):
+    res = client_sin_transaccion.get("/dashboard/mapa-clientes", headers=headers_admin)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["clientes"] and data["productos_disponibles"]
+    for c in data["clientes"]:
+        assert c["ubicacion_aproximada"] is True
+        assert 4.3 < c["lat"] < 4.9 and -74.3 < c["lng"] < -73.9
+        assert c["producto_principal"] in data["productos_disponibles"]
+
+
+def test_mapa_clientes_posicion_es_estable_entre_llamadas(client_sin_transaccion, headers_admin):
+    a = client_sin_transaccion.get("/dashboard/mapa-clientes", headers=headers_admin).json()["clientes"]
+    b = client_sin_transaccion.get("/dashboard/mapa-clientes", headers=headers_admin).json()["clientes"]
+    assert [(x["id_cliente"], x["lat"], x["lng"]) for x in a] == [(x["id_cliente"], x["lat"], x["lng"]) for x in b]
+
+
+def test_mapa_clientes_filtra_por_producto(client_sin_transaccion, headers_admin):
+    todos = client_sin_transaccion.get("/dashboard/mapa-clientes", headers=headers_admin).json()
+    producto = todos["productos_disponibles"][0]
+    filtrado = client_sin_transaccion.get(
+        "/dashboard/mapa-clientes", params={"producto": producto}, headers=headers_admin).json()
+    assert 0 < len(filtrado["clientes"]) <= len(todos["clientes"])
+    for c in filtrado["clientes"]:
+        assert producto in [p["nombre"] for p in c["productos"]]
+
+
+def test_mapa_clientes_excluye_clientes_sin_autorizacion(client_sin_transaccion, headers_admin):
+    from app.db.session import SessionLocal
+    from app.models.models import Cliente
+    db = SessionLocal()
+    try:
+        sin_auth = {c.id_cliente for c in db.query(Cliente).filter(Cliente.autorizacion_datos != True).all()}  # noqa: E712
+    finally:
+        db.close()
+    ids = {c["id_cliente"] for c in client_sin_transaccion.get(
+        "/dashboard/mapa-clientes", headers=headers_admin).json()["clientes"]}
+    assert not (ids & sin_auth)

@@ -9,7 +9,7 @@ from app.db.session import get_db
 from app.models.models import Cliente, Pedido, DetallePedido, Producto, Usuario
 from app.schemas.olap import CuboOlapOut
 from app.core.dependencies import get_current_user
-from app.api.promociones import categorizar
+from app.core.segmentos import categorizar
 
 router = APIRouter(prefix="/olap", tags=["olap"])
 

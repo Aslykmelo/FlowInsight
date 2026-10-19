@@ -1,20 +1,24 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 import { useTextSize } from "../context/TextSizeContext";
 import { useAuth } from "../context/AuthContext";
+import {
+  LayoutDashboard, FileUp, Sparkles, Users, FileText, Megaphone, MapPinned, Boxes, Brain,
+  Settings, UserRound, Menu, X, type LucideIcon,
+} from "lucide-react";
 
-const NAV: { emoji: string; label: string; path: string; soloAdmin?: boolean }[] = [
-  { emoji:"📊", label:"Dashboard",    path:"/dashboard"    },
-  { emoji:"📁", label:"Cargar Excel", path:"/upload"       },
-  { emoji:"🤖", label:"Predicciones", path:"/predictions"  },
-  { emoji:"👥", label:"Clientes",     path:"/clients"      },
-  { emoji:"📄", label:"Reportes",     path:"/reports"      },
-  { emoji:"🎯", label:"Promociones",  path:"/promotions"   },
-  { emoji:"🗺️", label:"Mapa Bogotá",  path:"/sales-map"    },
-  { emoji:"📦", label:"Cubo OLAP 3D", path:"/olap-cube"    },
-  { emoji:"🧠", label:"Cómo funciona", path:"/model"       },
-  { emoji:"⚙️", label:"Usuarios",     path:"/users", soloAdmin:true },
-  { emoji:"👤", label:"Mi perfil",    path:"/profile"      },
+const NAV: { icon: LucideIcon; label: string; path: string; soloAdmin?: boolean }[] = [
+  { icon: LayoutDashboard, label: "Dashboard",     path: "/dashboard"   },
+  { icon: FileUp,          label: "Cargar Excel",  path: "/upload"      },
+  { icon: Sparkles,        label: "Predicciones",  path: "/predictions" },
+  { icon: Users,           label: "Clientes",      path: "/clients"     },
+  { icon: FileText,        label: "Reportes",      path: "/reports"     },
+  { icon: Megaphone,       label: "Promociones",   path: "/promotions"  },
+  { icon: MapPinned,       label: "Mapa Bogotá",   path: "/sales-map"   },
+  { icon: Boxes,           label: "Cubo OLAP",     path: "/olap-cube"   },
+  { icon: Brain,           label: "Cómo funciona", path: "/model"       },
+  { icon: Settings,        label: "Usuarios",      path: "/users", soloAdmin: true },
+  { icon: UserRound,       label: "Mi perfil",     path: "/profile"     },
 ];
 
 const iniciales = (nombre: string) =>
@@ -25,9 +29,6 @@ const iniciales = (nombre: string) =>
     .map((parte) => parte[0].toUpperCase())
     .join("") || "?";
 
-// Oculta el emoji decorativo al lector de pantalla y deja que el
-// texto visible de al lado sea lo único que se anuncie.
-const emojiStyle: CSSProperties = { fontSize: 14 };
 
 // ─── Control de tamaño de texto (accesibilidad) ────────
 function TextSizeControl() {
@@ -36,13 +37,13 @@ function TextSizeControl() {
 
   return (
     <div style={{ padding:"0 1.25rem 1rem", display:"flex", flexDirection:"column", gap:6 }}>
-      <p style={{ margin:0, fontSize:11, color:"#8888aa" }}>Tamaño de texto</p>
+      <p style={{ margin:0, fontSize:11, color:"var(--c-sidebar-text)" }}>Tamaño de texto</p>
       <div style={{ display:"flex", alignItems:"center", gap:6 }}>
         <button
           type="button"
           onClick={decrease}
           aria-label="Reducir tamaño de texto"
-          style={{ width:28, height:28, borderRadius:6, border:"0.5px solid #2a2a4a",
+          style={{ width:40, height:40, borderRadius:8, border:"1px solid var(--c-sidebar-line)",
             background:"rgba(255,255,255,0.05)", color:"#fff", cursor:"pointer",
             fontSize:13, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center" }}>
           A-
@@ -52,8 +53,8 @@ function TextSizeControl() {
           onClick={reset}
           aria-label="Restablecer tamaño de texto"
           title="Restablecer"
-          style={{ flex:1, height:28, borderRadius:6, border:"0.5px solid #2a2a4a",
-            background:"rgba(255,255,255,0.05)", color:"#8888aa", cursor:"pointer",
+          style={{ flex:1, height:40, borderRadius:8, border:"1px solid var(--c-sidebar-line)",
+            background:"rgba(255,255,255,0.05)", color:"var(--c-sidebar-text)", cursor:"pointer",
             fontSize:11, display:"flex", alignItems:"center", justifyContent:"center" }}>
           {porcentaje}%
         </button>
@@ -61,7 +62,7 @@ function TextSizeControl() {
           type="button"
           onClick={increase}
           aria-label="Aumentar tamaño de texto"
-          style={{ width:28, height:28, borderRadius:6, border:"0.5px solid #2a2a4a",
+          style={{ width:40, height:40, borderRadius:8, border:"1px solid var(--c-sidebar-line)",
             background:"rgba(255,255,255,0.05)", color:"#fff", cursor:"pointer",
             fontSize:13, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center" }}>
           A+
@@ -89,6 +90,7 @@ export default function Sidebar() {
 
   return (
     <>
+      <div className="sidebar-topbar" aria-hidden="true">FlowInsight</div>
       <button
         type="button"
         className="sidebar-toggle"
@@ -96,7 +98,7 @@ export default function Sidebar() {
         aria-expanded={abierto}
         onClick={() => setAbierto((v) => !v)}
       >
-        {abierto ? "✕" : "☰"}
+        {abierto ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
       </button>
 
       <div
@@ -107,30 +109,30 @@ export default function Sidebar() {
       <aside
         aria-label="Navegación principal"
         className={`sidebar${abierto ? " sidebar-open" : ""}`}
-        style={{ width:220, minHeight:"100vh", background:"#16163a",
-        display:"flex", flexDirection:"column", padding:"1.5rem 0", flexShrink:0 }}>
-        <div style={{ padding:"0 1.25rem 1.5rem" }}>
-          <p style={{ margin:0, fontSize:19, fontWeight:500, color:"#fff" }}>
-            <span aria-hidden="true">🔮</span> FlowInsight
+        style={{ width:232, minHeight:"100vh",
+        display:"flex", flexDirection:"column", padding:"1.25rem 0", flexShrink:0 }}>
+        <div style={{ padding:"0 1.25rem 1rem" }}>
+          <p style={{ margin:0, fontSize:19, fontWeight:700, color:"#fff", letterSpacing:"-0.01em",
+            display:"flex", alignItems:"center", gap:10 }}>
+            <span aria-hidden="true" style={{ width:30, height:30, borderRadius:9, background:"var(--c-primary)",
+              display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+              <Sparkles size={17} color="#fff" />
+            </span>
+            FlowInsight
           </p>
-          <p style={{ margin:"4px 0 0", fontSize:11, color:"#8888aa" }}>W&T Food S.A.S</p>
+          <p style={{ margin:"6px 0 0 40px", fontSize:11, color:"var(--c-sidebar-text)" }}>W&T Food S.A.S</p>
         </div>
-        <nav style={{ flex:1, overflowY:"auto" }}>
+        <nav style={{ flex:1 }}>
           {NAV.filter(item => !item.soloAdmin || esAdmin).map(item => {
             const active = location.pathname === item.path;
             return (
               <button key={item.label}
                 type="button"
+                className="nav-item"
                 aria-current={active ? "page" : undefined}
                 aria-label={item.label}
-                onClick={() => irA(item.path)}
-                style={{ width:"100%",
-                  background: active ? "rgba(83,74,183,0.2)":"transparent",
-                  border:"none", borderLeft: active ? "3px solid #534AB7":"3px solid transparent",
-                  color: active ? "#fff":"#8888aa", padding:"10px 1.25rem",
-                  textAlign:"left", cursor:"pointer", fontSize:14,
-                  display:"flex", alignItems:"center", gap:10 }}>
-                <span aria-hidden="true" style={emojiStyle}>{item.emoji}</span>
+                onClick={() => irA(item.path)}>
+                <item.icon size={18} aria-hidden="true" />
                 <span>{item.label}</span>
               </button>
             );
@@ -139,10 +141,10 @@ export default function Sidebar() {
 
         <TextSizeControl />
 
-        <div style={{ padding:"1rem 1.25rem", borderTop:"0.5px solid #2a2a4a",
+        <div style={{ padding:"1rem 1.25rem", borderTop:"1px solid var(--c-sidebar-line)",
           display:"flex", flexDirection:"column", gap:10 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div aria-hidden="true" style={{ width:34, height:34, borderRadius:"50%", background:"#534AB7",
+            <div aria-hidden="true" style={{ width:34, height:34, borderRadius:"50%", background:"var(--c-primary)",
               display:"flex", alignItems:"center", justifyContent:"center",
               fontSize:12, color:"#fff", fontWeight:500, flexShrink:0 }}>
               {iniciales(usuario?.nombre_usuario ?? "")}
@@ -152,13 +154,13 @@ export default function Sidebar() {
                 textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                 {usuario?.nombre_usuario ?? "Usuario"}
               </p>
-              <p style={{ margin:0, fontSize:11, color:"#8888aa" }}>{usuario?.rol ?? ""}</p>
+              <p style={{ margin:0, fontSize:11, color:"var(--c-sidebar-text)" }}>{usuario?.rol ?? ""}</p>
             </div>
           </div>
           <button type="button" onClick={salir}
-            style={{ width:"100%", background:"rgba(255,255,255,0.05)", color:"#ccc",
-              border:"0.5px solid #2a2a4a", borderRadius:6, padding:"6px 0",
-              cursor:"pointer", fontSize:12 }}>
+            style={{ width:"100%", background:"rgba(255,255,255,0.05)", color:"#e4e4f2",
+              border:"1px solid var(--c-sidebar-line)", borderRadius:8, minHeight:40, padding:"10px 0",
+              cursor:"pointer", fontSize:13 }}>
             Cerrar sesión
           </button>
         </div>

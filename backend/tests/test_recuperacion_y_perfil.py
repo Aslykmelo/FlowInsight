@@ -1,8 +1,11 @@
 """Recuperacion de contrasena por SMS, perfil del usuario y ficha del modelo."""
 from datetime import datetime, timedelta
 
+import re
+
 import pytest
 
+from app.core.config import settings
 from app.core.security import hash_password
 from app.models.models import Usuario
 
@@ -27,14 +30,28 @@ def usuario_con_telefono(db_session):
 
 @pytest.fixture()
 def sms_enviados(monkeypatch):
-    """Intercepta el envio de SMS y guarda (telefono, mensaje)."""
+    """Simula un proveedor de SMS real y guarda (telefono, mensaje)."""
     enviados: list[tuple[str, str]] = []
 
     def falso_envio(telefono, mensaje):
         enviados.append((telefono, mensaje))
         return True
 
+    monkeypatch.setattr(settings, "sms_provider", "twilio")
     monkeypatch.setattr("app.api.auth.enviar_sms", falso_envio)
+    return enviados
+
+
+@pytest.fixture()
+def correos_enviados(monkeypatch):
+    """Intercepta el correo y guarda (destino, asunto, html, texto)."""
+    enviados: list[tuple[str, str, str, str]] = []
+
+    def falso_correo(destino, asunto, html, texto):
+        enviados.append((destino, asunto, html, texto))
+        return True
+
+    monkeypatch.setattr("app.api.auth.enviar_correo", falso_correo)
     return enviados
 
 
@@ -74,7 +91,27 @@ def test_forgot_password_no_revela_si_el_correo_existe(client, sms_enviados):
     assert sms_enviados == []
 
 
-def test_usuario_sin_telefono_no_recibe_sms(client, db_session, sms_enviados):
+def test_sin_proveedor_de_sms_el_codigo_llega_al_correo(client, usuario_con_telefono, correos_enviados):
+    # sms_provider por defecto es "consola": no hay SMS real, asi que se usa el correo de la cuenta
+    res = client.post("/auth/forgot-password", json={"correo": CORREO})
+    assert res.status_code == 200
+    assert len(correos_enviados) == 1
+    destino, asunto, html, texto = correos_enviados[0]
+    codigo = re.search(r"es (\d{6})\.", texto).group(1)
+    assert destino == CORREO
+    assert asunto == f"Código de verificación de FlowInsight: {codigo}"
+    assert CORREO in html and "No solicitó este cambio" in html and "hora de Colombia" in html
+    assert "nunca le pedirá" in texto and CORREO in texto
+    assert codigo in html and "FlowInsight" in html and "W&amp;T Food" in html
+    assert "<a " not in html          # el correo de seguridad no lleva enlaces ni botones
+    res = client.post(
+        "/auth/reset-password",
+        json={"correo": CORREO, "codigo": codigo, "nueva_contrasena": "clave-nueva-2"},
+    )
+    assert res.status_code == 200
+
+
+def test_usuario_sin_telefono_recibe_el_codigo_por_correo(client, db_session, correos_enviados):
     db_session.add(Usuario(
         id_rol=2, nombre_usuario="Sin telefono (test)", contrasena=hash_password(CLAVE),
         correo="sin.telefono.test@flowinsight.com", estado="activo",
@@ -82,7 +119,19 @@ def test_usuario_sin_telefono_no_recibe_sms(client, db_session, sms_enviados):
     db_session.commit()
     res = client.post("/auth/forgot-password", json={"correo": "sin.telefono.test@flowinsight.com"})
     assert res.status_code == 200
-    assert sms_enviados == []
+    assert [c[0] for c in correos_enviados] == ["sin.telefono.test@flowinsight.com"]
+
+
+def test_si_falla_el_sms_se_envia_por_correo(client, usuario_con_telefono, correos_enviados, monkeypatch):
+    monkeypatch.setattr(settings, "sms_provider", "twilio")
+    monkeypatch.setattr("app.api.auth.enviar_sms", lambda telefono, mensaje: False)
+    client.post("/auth/forgot-password", json={"correo": CORREO})
+    assert len(correos_enviados) == 1
+
+
+def test_con_sms_disponible_no_se_envia_correo(client, usuario_con_telefono, sms_enviados, correos_enviados):
+    client.post("/auth/forgot-password", json={"correo": CORREO})
+    assert len(sms_enviados) == 1 and correos_enviados == []
 
 
 def test_el_codigo_se_guarda_cifrado(client, db_session, usuario_con_telefono, sms_enviados):
@@ -239,3 +288,23 @@ def test_ficha_del_modelo_expone_metricas_y_umbrales(client_sin_transaccion, hea
 
 def test_ficha_del_modelo_requiere_autenticacion(client_sin_transaccion):
     assert client_sin_transaccion.get("/predicciones/modelo").status_code == 401
+
+
+# ----------------------------------------------------------------- actividad del perfil
+def test_actividad_requiere_sesion(client):
+    assert client.get("/auth/me/actividad").status_code == 401
+
+
+def test_actividad_cuenta_los_reportes_del_propio_usuario(client_sin_transaccion, headers_admin):
+    antes = client_sin_transaccion.get("/auth/me/actividad", headers=headers_admin).json()
+    nuevo = client_sin_transaccion.post(
+        "/reports/generate", json={"tipo": "ventas", "formato": "xlsx"}, headers=headers_admin)
+    assert nuevo.status_code == 200
+    try:
+        despues = client_sin_transaccion.get("/auth/me/actividad", headers=headers_admin).json()
+        assert despues["reportes_generados"] == antes["reportes_generados"] + 1
+        assert despues["reportes_por_formato"]["xlsx"] == antes["reportes_por_formato"].get("xlsx", 0) + 1
+        assert despues["reportes_recientes"][0]["tipo"] == "ventas"
+        assert len(despues["reportes_recientes"]) <= 5
+    finally:
+        client_sin_transaccion.delete(f"/reports/{nuevo.json()['id_reporte']}", headers=headers_admin)

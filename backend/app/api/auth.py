@@ -4,14 +4,17 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.models import Usuario
+from app.models.models import Usuario, ReporteGenerado
 from app.core.config import settings
 from app.core.security import verify_password, hash_password, create_access_token
 from app.core.dependencies import get_current_user
 from app.core.sms import enviar_sms
+from app.core.correo import enviar_correo
+from app.core.plantillas_correo import correo_codigo
 from app.core.telefono import normalizar_telefono
 from app.schemas.auth import (
     Token,
@@ -21,6 +24,8 @@ from app.schemas.auth import (
     ForgotPasswordIn,
     ResetPasswordIn,
     MensajeOut,
+    ActividadOut,
+    ReporteReciente,
 )
 
 logger = logging.getLogger("flowinsight.auth")
@@ -28,9 +33,29 @@ logger = logging.getLogger("flowinsight.auth")
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 MENSAJE_RECUPERACION = (
-    "Si el correo está registrado y tiene un teléfono asociado, enviamos un código por SMS."
+    "Si el correo está registrado, enviamos un código de verificación por SMS o por correo."
 )
 ERROR_CODIGO = "Código inválido o vencido"
+
+
+def _enviar_codigo(usuario: Usuario, codigo: str) -> str | None:
+    """Entrega el codigo por SMS si hay telefono y un proveedor de SMS real configurado; si no se puede,
+    lo envia al correo de la cuenta. Devuelve el canal usado ("sms" o "correo") o None si fallo todo."""
+    if usuario.telefono and settings.sms_provider != "consola":
+        mensaje = (
+            f"FlowInsight: tu código para restablecer la contraseña es {codigo}. "
+            f"Vence en {settings.recovery_code_minutes} minutos. Si no lo pediste, ignóralo."
+        )
+        if enviar_sms(usuario.telefono, mensaje):
+            return "sms"
+        logger.warning("Fallo el SMS de recuperación del usuario %s; se intenta por correo", usuario.id_usuario)
+
+    asunto, html, texto = correo_codigo(
+        usuario.nombre_usuario, codigo, settings.recovery_code_minutes, correo=usuario.correo, solicitado=datetime.utcnow()
+    )
+    if enviar_correo(usuario.correo, asunto, html, texto):
+        return "correo"
+    return None
 
 
 def _usuario_out(usuario: Usuario) -> UsuarioOut:
@@ -70,6 +95,31 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 @router.get("/me", response_model=UsuarioOut)
 def leer_usuario_actual(usuario: Usuario = Depends(get_current_user)):
     return _usuario_out(usuario)
+
+
+@router.get("/me/actividad", response_model=ActividadOut)
+def actividad_del_usuario(
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_current_user),
+):
+    """Resumen de lo que ha hecho el usuario en el sistema (hoy: los reportes que ha generado)."""
+    propios = db.query(ReporteGenerado).filter(ReporteGenerado.id_usuario == usuario.id_usuario)
+    por_formato = dict(
+        db.query(ReporteGenerado.formato, func.count(ReporteGenerado.id_reporte))
+        .filter(ReporteGenerado.id_usuario == usuario.id_usuario)
+        .group_by(ReporteGenerado.formato)
+        .all()
+    )
+    recientes = propios.order_by(ReporteGenerado.fecha.desc()).limit(5).all()
+    return ActividadOut(
+        reportes_generados=sum(por_formato.values()),
+        reportes_por_formato={(k or "otro"): v for k, v in por_formato.items()},
+        reportes_recientes=[
+            ReporteReciente(id_reporte=r.id_reporte, nombre=r.nombre, tipo=r.tipo, formato=r.formato, fecha=r.fecha)
+            for r in recientes
+        ],
+        ultima_sesion=usuario.ultima_sesion,
+    )
 
 
 @router.patch("/me", response_model=UsuarioOut)
@@ -115,7 +165,7 @@ def solicitar_codigo_recuperacion(datos: ForgotPasswordIn, db: Session = Depends
     Siempre responde igual, exista o no la cuenta, para no revelar que correos estan registrados."""
     usuario = db.query(Usuario).filter(Usuario.correo == datos.correo.strip()).first()
 
-    if not usuario or usuario.estado == "inactivo" or not usuario.telefono:
+    if not usuario or usuario.estado == "inactivo":
         return MensajeOut(mensaje=MENSAJE_RECUPERACION)
 
     ahora = datetime.now()
@@ -132,13 +182,9 @@ def solicitar_codigo_recuperacion(datos: ForgotPasswordIn, db: Session = Depends
     usuario.codigo_recuperacion_intentos = 0
     db.commit()
 
-    enviado = enviar_sms(
-        usuario.telefono,
-        f"FlowInsight: tu código para restablecer la contraseña es {codigo}. "
-        f"Vence en {settings.recovery_code_minutes} minutos. Si no lo pediste, ignóralo.",
-    )
-    if not enviado:
-        logger.error("No se pudo enviar el SMS de recuperación al usuario %s", usuario.id_usuario)
+    canal = _enviar_codigo(usuario, codigo)
+    if canal is None:
+        logger.error("No se pudo enviar el código de recuperación al usuario %s por ningún canal", usuario.id_usuario)
 
     return MensajeOut(mensaje=MENSAJE_RECUPERACION)
 

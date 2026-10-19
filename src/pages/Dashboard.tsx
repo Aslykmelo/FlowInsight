@@ -1,7 +1,11 @@
 import { API_URL } from "../config";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
+import EmptyState from "../components/EmptyState";
+import ErrorMessage from "../components/ErrorMessage";
 import { useAuth } from "../context/AuthContext";
+import { Upload, Users, TrendingUp, Receipt, Wallet, ChartColumn, type LucideIcon } from "lucide-react";
 
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area,
@@ -39,14 +43,13 @@ interface ApiClienteResumen {
   ciudad: string | null;
   monto_total: number;
   ultima_compra: string | null;
-  estado: "activo" | "en riesgo" | "inactivo";
+  estado: "activo" | "ocasional" | "en_riesgo" | "sin_pedidos";
 }
 
 interface SalesPoint {
   mesKey: string; // "YYYY-MM", para filtrar por período
   mes: string;    // etiqueta legible
   ventas: number;
-  prediccion: number;
 }
 
 type Periodo = "7d" | "30d" | "mes" | "anio";
@@ -61,8 +64,31 @@ const REFRESH_MS = 60000;
 
 const NOMBRES_MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
+// Colores de gráficos: salen de la paleta del sistema de diseño (design.css).
+const COLOR = {
+  primary: "#1e40af",
+  accent: "#e8a33d",
+  ok: "#0f6e56",
+  bad: "#a33a1e",
+  grid: "#e6e8ee",
+  axis: "#5b6472",
+};
+
+const TICK = { fontSize: 12, fill: COLOR.axis };
+const TOOLTIP_STYLE = { borderRadius: 8, border: "1px solid #e6e8ee", fontSize: 13 };
+
 const formatoMoneda = (valor: number) =>
   valor.toLocaleString("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 });
+
+// Ejes: valores cortos y legibles ("$1,5 M", "$850 mil")
+const formatoCompacto = (v: number) => {
+  const n = Number(v);
+  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toLocaleString("es-CO", { maximumFractionDigits: 1 })} M`;
+  if (Math.abs(n) >= 1_000) return `$${Math.round(n / 1_000).toLocaleString("es-CO")} mil`;
+  return `$${n}`;
+};
+
+const recortar = (texto: string, max = 18) => (texto.length > max ? `${texto.slice(0, max - 1)}…` : texto);
 
 function authHeaders(): HeadersInit | null {
   const token = localStorage.getItem("token");
@@ -78,31 +104,30 @@ function SkeletonBox({ width = "100%", height = 16, radius = 6 }: { width?: numb
   return (
     <div style={{
       width, height, borderRadius: radius,
-      background: "linear-gradient(90deg, #eee 25%, #f3f3f3 37%, #eee 63%)",
-      backgroundSize: "400% 100%",
-      animation: "flowinsight-shimmer 1.4s ease infinite",
+      background: "var(--c-line)",
+      animation: "flowinsight-pulse-skeleton 1.4s ease-in-out infinite",
     }} />
   );
 }
 
 function KPISkeleton() {
   return (
-    <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1rem 1.25rem" }}>
-      <SkeletonBox width={90} height={12} />
-      <div style={{ height:8 }} />
-      <SkeletonBox width={120} height={26} />
-      <div style={{ height:10 }} />
-      <SkeletonBox width={70} height={18} radius={6} />
+    <div className="kpi" role="status" aria-label="Cargando indicador">
+      <SkeletonBox width={96} height={12} />
+      <div style={{ height: "var(--s-3)" }} />
+      <SkeletonBox width={128} height={28} />
+      <div style={{ height: "var(--s-3)" }} />
+      <SkeletonBox width={112} height={12} />
     </div>
   );
 }
 
 function ChartSkeleton({ height = 240 }: { height?: number }) {
   return (
-    <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1.25rem" }}>
+    <div className="card" role="status" aria-label="Cargando gráfico">
       <SkeletonBox width={180} height={16} />
-      <div style={{ height:16 }} />
-      <SkeletonBox height={height} radius={10} />
+      <div style={{ height: "var(--s-4)" }} />
+      <SkeletonBox height={height} radius={8} />
     </div>
   );
 }
@@ -119,6 +144,14 @@ function useCountUp(valor: number, duracionMs = 700): number {
     const desde = inicioValor.current;
     const hasta = valor;
     if (desde === hasta) return;
+
+    // Respeta la preferencia de "reducir movimiento"
+    if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      inicioValor.current = hasta;
+      setDisplay(hasta);
+      return;
+    }
+
     const inicioTiempo = performance.now();
     let raf: number;
 
@@ -148,21 +181,24 @@ interface KPIDef {
   valor: number;
   formato: (v: number) => string;
   delta: string;
-  color: string;
-  bg: string;
+  icon: LucideIcon;
 }
 
 function KPICard({ kpi }: { kpi: KPIDef }) {
   const animado = useCountUp(kpi.valor);
+  const Icono = kpi.icon;
   return (
-    <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1rem 1.25rem" }}>
-      <p style={{ margin:"0 0 6px", fontSize:13, color:"#888" }}>{kpi.label}</p>
-      <p style={{ margin:"0 0 8px", fontSize:26, fontWeight:500, color:kpi.color, fontVariantNumeric:"tabular-nums" }}>
-        {kpi.formato(animado)}
-      </p>
-      <span style={{ fontSize:12, color:"#0F6E56", background:"#E1F5EE", padding:"2px 8px", borderRadius:6 }}>
-        {kpi.delta}
-      </span>
+    <div className="kpi">
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--s-3)" }}>
+        <p className="kpi-label">{kpi.label}</p>
+        <span aria-hidden="true" style={{ flexShrink: 0, width: 36, height: 36, borderRadius: "var(--r-sm)",
+          background: "var(--c-primary-soft)", color: "var(--c-primary)",
+          display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+          <Icono size={20} />
+        </span>
+      </div>
+      <p className="kpi-value">{kpi.formato(animado)}</p>
+      <p className="kpi-note">{kpi.delta}</p>
     </div>
   );
 }
@@ -171,18 +207,22 @@ function KPICard({ kpi }: { kpi: KPIDef }) {
 // TARJETA CONTENEDORA (con estado de error propio)
 // ============================================================
 
-function Card({ title, error, children }: { title: string; error?: string | null; children: React.ReactNode }) {
+function Card({ title, error, onRetry, children }: {
+  title: string; error?: string | null; onRetry?: () => void; children: React.ReactNode;
+}) {
   return (
-    <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1.25rem" }}>
-      <h2 style={{ margin:"0 0 1rem", fontSize:16, fontWeight:500 }}>{title}</h2>
+    <section className="card" aria-label={title}>
+      <h2>{title}</h2>
       {error ? (
-        <div role="alert" style={{ background:"#FAECE7", border:"0.5px solid #993C1D", borderRadius:8,
-          padding:"0.875rem 1rem", fontSize:13, color:"#993C1D" }}>
-          No fue posible cargar esta información. {error}
-        </div>
+        <ErrorMessage message={`No fue posible cargar esta información. ${error}`} onRetry={onRetry} />
       ) : children}
-    </div>
+    </section>
   );
+}
+
+// Envoltorio accesible para un gráfico: describe su contenido a lectores de pantalla
+function ChartBox({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div role="img" aria-label={label}>{children}</div>;
 }
 
 // ============================================================
@@ -208,12 +248,18 @@ function filtrarPorPeriodo(ventas: ApiSale[], periodo: Periodo): ApiSale[] {
   return ventas.slice(-1);
 }
 
+const TABS = [
+  { id: "ventas" as const, label: "Ventas" },
+  { id: "clientes" as const, label: "Clientes" },
+];
+
 // ============================================================
 // DASHBOARD
 // ============================================================
 
 export default function Dashboard() {
   const { usuario } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"ventas" | "clientes">("ventas");
   const [periodo, setPeriodo] = useState<Periodo>("anio");
 
@@ -317,10 +363,7 @@ export default function Dashboard() {
       const [anio, mesNum] = item.fecha.split("-");
       const nombreMes = NOMBRES_MESES[Number(mesNum) - 1] || item.fecha;
       const ventas = Number(item.ingresos);
-      // Predicción temporal: NO crea datos en la BD, solo mantiene la
-      // gráfica mientras se conecta el modelo ML real.
-      const prediccion = Math.round(ventas * 0.94);
-      return { mesKey: item.fecha, mes: `${nombreMes} ${anio.slice(-2)}`, ventas, prediccion };
+      return { mesKey: item.fecha, mes: `${nombreMes} ${anio.slice(-2)}`, ventas };
     });
   }, [salesState.data]);
 
@@ -356,268 +399,374 @@ export default function Dashboard() {
 
   const clientesEnRiesgo = useMemo(() => {
     if (!clientesState.data) return [];
-    return clientesState.data.filter((c) => c.estado === "en riesgo");
+    return clientesState.data.filter((c) => c.estado === "en_riesgo");
   }, [clientesState.data]);
 
   const kpis = kpisState.data;
   const kpiCards: KPIDef[] = kpis ? [
-    { label:"Total clientes",  valor:kpis.total_clientes,  formato:(v) => Math.round(v).toLocaleString("es-CO"), delta:"Clientes registrados", color:"#534AB7", bg:"#EEEDFE" },
-    { label:"Ventas del mes",  valor: salesFiltrado.length > 0 ? salesFiltrado[salesFiltrado.length - 1].ventas : 0, formato:formatoMoneda, delta:"Ventas registradas", color:"#0F6E56", bg:"#E1F5EE" },
-    { label:"Ticket promedio", valor:kpis.ticket_promedio, formato:formatoMoneda, delta:"Promedio por pedido", color:"#BA7517", bg:"#FAEEDA" },
-    { label:"Ingresos totales",valor:kpis.ingresos_totales,formato:formatoMoneda, delta:"Ventas totales", color:"#0F6E56", bg:"#E1F5EE" },
+    { label:"Total clientes",  valor:kpis.total_clientes,  formato:(v) => Math.round(v).toLocaleString("es-CO"), delta:"Clientes registrados", icon: Users },
+    { label:"Ventas del mes",  valor: salesFiltrado.length > 0 ? salesFiltrado[salesFiltrado.length - 1].ventas : 0, formato:formatoMoneda, delta:"Ventas registradas", icon: TrendingUp },
+    { label:"Ticket promedio", valor:kpis.ticket_promedio, formato:formatoMoneda, delta:"Promedio por pedido", icon: Receipt },
+    { label:"Ingresos totales",valor:kpis.ingresos_totales,formato:formatoMoneda, delta:"Ventas totales", icon: Wallet },
   ] : [];
 
   const churn = churnState.data;
   const RIESGO_PIE_DATA = [
-    { name:"Bajo riesgo",  value: churn?.bajo_riesgo ?? 0,  color:"#1D9E75" },
-    { name:"Riesgo medio", value: churn?.riesgo_medio ?? 0, color:"#EF9F27" },
-    { name:"Alto riesgo",  value: churn?.alto_riesgo ?? 0,  color:"#993C1D" },
+    { name:"Bajo riesgo",  value: churn?.bajo_riesgo ?? 0,  color: COLOR.ok },
+    { name:"Riesgo medio", value: churn?.riesgo_medio ?? 0, color: COLOR.accent },
+    { name:"Alto riesgo",  value: churn?.alto_riesgo ?? 0,  color: COLOR.bad },
   ];
+  const totalRiesgo = RIESGO_PIE_DATA.reduce((acc, r) => acc + r.value, 0);
+
+  const cargandoVentas = salesState.loading && !salesState.data;
+  const cargandoClientes = clientesState.loading && !clientesState.data;
+  const reintentar = () => cargarTodo(false);
+  const sinVentas = salesFiltrado.length === 0;
+  const irACargar = () => navigate("/upload");
+
+  const vacioVentas = (
+    <EmptyState
+      icon={<ChartColumn size={24} />}
+      title="Todavía no hay ventas registradas"
+      description="Las gráficas se llenan cuando cargas un archivo de ventas en Excel."
+      actionLabel="Ir a Cargar Excel"
+      onAction={irACargar}
+    />
+  );
+
+  const textoActualizacion = !ultimaActualizacion
+    ? null
+    : segundosDesde < 10 ? "hace unos segundos"
+    : segundosDesde < 60 ? `hace ${segundosDesde} s`
+    : `hace ${Math.floor(segundosDesde / 60)} min`;
 
   return (
-    <div className="app-shell" style={{ background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+    <div className="app-shell">
       <Sidebar />
 
       <style>{`
-        @keyframes flowinsight-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+        @keyframes flowinsight-pulse-skeleton { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .dash-toolbar {
+          background: var(--c-surface);
+          border-bottom: 1px solid var(--c-line);
+          padding: 0 var(--s-5);
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: var(--s-2) var(--s-4);
+        }
+        .dash-tabs { display: flex; gap: var(--s-5); }
+        .dash-tab {
+          min-height: 48px;
+          padding: 0 var(--s-1);
+          background: transparent;
+          border: none;
+          border-bottom: 3px solid transparent;
+          color: var(--c-muted);
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .dash-tab:hover { color: var(--c-ink); }
+        .dash-tab[aria-selected="true"] { color: var(--c-primary); border-bottom-color: var(--c-primary); }
+        .dash-periods { display: flex; gap: var(--s-2); flex-wrap: wrap; padding: var(--s-2) 0; }
+        .dash-periods .btn[aria-pressed="true"] {
+          background: var(--c-primary-soft);
+          border-color: var(--c-primary);
+          color: var(--c-primary);
+        }
+        .dash-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--s-4); }
+        .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: var(--s-5); }
+        .dash-legend-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); font-size: 14px; }
+        @media (max-width: 600px) {
+          .dash-toolbar { padding: 0 var(--s-4); }
+        }
       `}</style>
 
-      <div className="app-main" style={{ overflow:"auto" }}>
-        {/* HEADER */}
-        <header style={{ background:"#fff", borderBottom:"0.5px solid #e0e0e0",
-          padding:"0.875rem 1.5rem", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+      <div className="app-main">
+        {/* ENCABEZADO */}
+        <header className="page-header">
           <div>
-            <h1 style={{ margin:0, fontSize:20, fontWeight:500 }}>
-              {usuario ? `Bienvenido, ${usuario.nombre_usuario.split(" ")[0]}` : "Dashboard"}
-            </h1>
-            <p style={{ margin:0, fontSize:13, color:"#888" }}>
-              {new Date().toLocaleDateString("es-CO", { dateStyle:"long" })}
-            </p>
+            <h1>{usuario ? `Bienvenido, ${usuario.nombre_usuario.split(" ")[0]}` : "Dashboard"}</h1>
+            <p>{new Date().toLocaleDateString("es-CO", { dateStyle:"long" })}</p>
           </div>
 
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"#888" }}>
-              {sinConexion && (
-                <span style={{ background:"#FAECE7", color:"#993C1D", padding:"3px 10px",
-                  borderRadius:6, fontWeight:500, fontSize:11 }}>
-                  Sin conexión
-                </span>
-              )}
-              {ultimaActualizacion && (
-                <span>
-                  Última actualización: hace {segundosDesde < 60 ? `${segundosDesde}s` : `${Math.floor(segundosDesde/60)} min`}
-                </span>
-              )}
-            </div>
-            <button
-              onClick={() => { window.location.href = "/upload"; }}
-              style={{ background:"#534AB7", color:"#fff", border:"none", borderRadius:8,
-                padding:"8px 18px", cursor:"pointer", fontSize:14 }}>
-              + Cargar Excel
+          <div style={{ display:"flex", alignItems:"center", gap:"var(--s-3)", flexWrap:"wrap" }}>
+            {sinConexion && (
+              <span className="chip chip-bad" role="status">Sin conexión con el servidor</span>
+            )}
+            {textoActualizacion && (
+              <span style={{ fontSize:13, color:"var(--c-muted)" }}>
+                Actualizado {textoActualizacion}
+              </span>
+            )}
+            <button type="button" className="btn btn-primary" onClick={irACargar}>
+              <Upload size={16} aria-hidden="true" />
+              Cargar Excel
             </button>
           </div>
         </header>
 
-        {/* PESTAÑAS */}
-        <div style={{ background:"#fff", borderBottom:"0.5px solid #e0e0e0", padding:"0 1.5rem",
-          display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
-          <div style={{ display:"flex", gap:4 }}>
-            {[{ id:"ventas" as const, label:"Ventas" }, { id:"clientes" as const, label:"Clientes" }].map((tab) => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                style={{ background:"transparent", border:"none",
-                  borderBottom: activeTab === tab.id ? "2px solid #534AB7" : "2px solid transparent",
-                  color: activeTab === tab.id ? "#534AB7" : "#666",
-                  fontWeight: activeTab === tab.id ? 500 : 400, fontSize:14,
-                  padding:"12px 4px", marginRight:20, cursor:"pointer" }}>
+        {/* PESTAÑAS Y PERÍODO */}
+        <div className="dash-toolbar">
+          <div className="dash-tabs" role="tablist" aria-label="Secciones del dashboard">
+            {TABS.map((tab, idx) => (
+              <button key={tab.id} type="button" role="tab" id={`tab-${tab.id}`}
+                className="dash-tab"
+                aria-selected={activeTab === tab.id}
+                aria-controls="dash-panel"
+                tabIndex={activeTab === tab.id ? 0 : -1}
+                onClick={() => setActiveTab(tab.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                    e.preventDefault();
+                    const sig = TABS[(idx + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+                    setActiveTab(sig.id);
+                    document.getElementById(`tab-${sig.id}`)?.focus();
+                  }
+                }}>
                 {tab.label}
               </button>
             ))}
           </div>
 
-          <div style={{ display:"flex", gap:6, padding:"8px 0" }}>
+          <div className="dash-periods" role="group" aria-label="Período de ventas">
             {PERIODOS.map((p) => (
-              <button key={p.id} onClick={() => setPeriodo(p.id)}
-                style={{ background: periodo === p.id ? "#16163a" : "transparent",
-                  color: periodo === p.id ? "#fff" : "#666",
-                  border: periodo === p.id ? "none" : "0.5px solid #e0e0e0",
-                  borderRadius:6, padding:"5px 12px", fontSize:12, cursor:"pointer" }}>
+              <button key={p.id} type="button" className="btn"
+                aria-pressed={periodo === p.id}
+                onClick={() => setPeriodo(p.id)}>
                 {p.label}
               </button>
             ))}
           </div>
         </div>
-        {periodo !== "anio" && (
-          <p style={{ margin:0, padding:"6px 1.5rem 0", fontSize:11, color:"#aaa" }}>
-            * El backend agrega las ventas por mes; "{PERIODOS.find(p => p.id === periodo)?.label}" muestra el mes más reciente disponible.
-          </p>
-        )}
 
-        <main style={{ padding:"1.5rem", display:"flex", flexDirection:"column", gap:"1.5rem" }}>
+        <main className="page-body">
+          {periodo !== "anio" && (
+            <p className="notice notice-warn" role="note" style={{ margin:0 }}>
+              El sistema agrupa las ventas por mes, así que &quot;{PERIODOS.find(p => p.id === periodo)?.label}&quot; muestra el mes más reciente disponible.
+            </p>
+          )}
 
           {/* KPIs — siempre visibles, en ambas pestañas */}
-          <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:12 }}>
+          <section aria-label="Indicadores principales" className="dash-kpis">
             {kpisState.loading && !kpis ? (
               [0,1,2,3].map((i) => <KPISkeleton key={i} />)
             ) : kpisState.error && !kpis ? (
-              <div style={{ gridColumn:"1 / -1" }}>
-                <Card title="KPIs" error={kpisState.error}><></></Card>
+              <div className="card" style={{ gridColumn:"1 / -1" }}>
+                <ErrorMessage message={`No fue posible cargar los indicadores. ${kpisState.error}`} onRetry={reintentar} />
               </div>
             ) : (
               kpiCards.map((kpi) => <KPICard key={kpi.label} kpi={kpi} />)
             )}
           </section>
 
-          {/* ================= PESTAÑA VENTAS ================= */}
-          {activeTab === "ventas" && (
-            <>
-              {salesState.loading && !salesState.data ? (
-                <ChartSkeleton height={260} />
-              ) : (
-                <Card title="Ventas reales vs Predicción ML" error={salesState.error}>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <LineChart data={salesFiltrado}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="mes" tick={{ fontSize:13 }} />
-                      <YAxis tick={{ fontSize:13 }} tickFormatter={(v) => `$${(Number(v)/1000).toFixed(0)}k`} />
-                      <Tooltip formatter={(v: any, name: any) => [formatoMoneda(Number(v)), name]} />
-                      <Legend />
-                      <Line type="monotone" dataKey="ventas" stroke="#534AB7" strokeWidth={2.5} dot={{ r:4 }} name="Ventas reales" />
-                      <Line type="monotone" dataKey="prediccion" stroke="#1D9E75" strokeWidth={2} strokeDasharray="6 4" dot={{ r:4 }} name="Predicción (ML)" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </Card>
-              )}
+          <div role="tabpanel" id="dash-panel" aria-labelledby={`tab-${activeTab}`}
+            style={{ display:"flex", flexDirection:"column", gap:"var(--s-5)" }}>
 
-              <div className="grid-auto-wide">
-                {salesState.loading && !salesState.data ? <ChartSkeleton /> : (
-                  <Card title="Ventas mensuales" error={salesState.error}>
-                    <ResponsiveContainer width="100%" height={240}>
-                      <BarChart data={salesFiltrado}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                        <XAxis dataKey="mes" tick={{ fontSize:13 }} />
-                        <YAxis tick={{ fontSize:13 }} tickFormatter={(v) => `$${(Number(v)/1000).toFixed(0)}k`} />
-                        <Tooltip formatter={(v: any) => [formatoMoneda(Number(v)), "Ventas"]} />
-                        <Bar dataKey="ventas" fill="#534AB7" radius={[4,4,0,0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+            {/* ================= PESTAÑA VENTAS ================= */}
+            {activeTab === "ventas" && (
+              <>
+                {cargandoVentas ? (
+                  <ChartSkeleton height={260} />
+                ) : (
+                  <Card title="Ventas por mes" error={salesState.error} onRetry={reintentar}>
+                    {sinVentas ? vacioVentas : (
+                      <>
+                        <ChartBox label={`Gráfico de líneas con las ventas reales para ${salesFiltrado.length} ${salesFiltrado.length === 1 ? "mes" : "meses"}. Última venta: ${formatoMoneda(salesFiltrado[salesFiltrado.length - 1].ventas)}.`}>
+                          <ResponsiveContainer width="100%" height={260}>
+                            <LineChart data={salesFiltrado}>
+                              <CartesianGrid strokeDasharray="3 3" stroke={COLOR.grid} />
+                              <XAxis dataKey="mes" tick={TICK} minTickGap={4} />
+                              <YAxis tick={TICK} width={88} tickFormatter={formatoCompacto} />
+                              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: any) => [formatoMoneda(Number(v)), name]} />
+                              <Legend wrapperStyle={{ fontSize: 13 }} />
+                              <Line isAnimationActive={false} type="monotone" dataKey="ventas" stroke={COLOR.primary} strokeWidth={3} dot={{ r:4 }} name="Ventas reales" />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </ChartBox>
+                      </>
+                    )}
                   </Card>
                 )}
 
-                {salesState.loading && !salesState.data ? <ChartSkeleton /> : (
-                  <Card title="Tendencia acumulada de ventas" error={salesState.error}>
-                    <ResponsiveContainer width="100%" height={240}>
-                      <AreaChart data={ventasAcumuladas}>
-                        <defs>
-                          <linearGradient id="colorAcumulado" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#1D9E75" stopOpacity={0.35} />
-                            <stop offset="95%" stopColor="#1D9E75" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                        <XAxis dataKey="mes" tick={{ fontSize:13 }} />
-                        <YAxis tick={{ fontSize:13 }} tickFormatter={(v) => `$${(Number(v)/1000).toFixed(0)}k`} />
-                        <Tooltip formatter={(v: any) => [formatoMoneda(Number(v)), "Acumulado"]} />
-                        <Area type="monotone" dataKey="acumulado" stroke="#1D9E75" strokeWidth={2} fill="url(#colorAcumulado)" />
-                      </AreaChart>
-                    </ResponsiveContainer>
+                <div className="dash-grid">
+                  {cargandoVentas ? <ChartSkeleton /> : (
+                    <Card title="Ventas mensuales" error={salesState.error} onRetry={reintentar}>
+                      {sinVentas ? vacioVentas : (
+                        <ChartBox label={`Gráfico de barras con las ventas de ${salesFiltrado.length} ${salesFiltrado.length === 1 ? "mes" : "meses"}.`}>
+                          <ResponsiveContainer width="100%" height={240}>
+                            <BarChart data={salesFiltrado}>
+                              <CartesianGrid strokeDasharray="3 3" stroke={COLOR.grid} />
+                              <XAxis dataKey="mes" tick={TICK} minTickGap={4} />
+                              <YAxis tick={TICK} width={88} tickFormatter={formatoCompacto} />
+                              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [formatoMoneda(Number(v)), "Ventas"]} />
+                              <Bar isAnimationActive={false} dataKey="ventas" fill={COLOR.primary} radius={[4,4,0,0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </ChartBox>
+                      )}
+                    </Card>
+                  )}
+
+                  {cargandoVentas ? <ChartSkeleton /> : (
+                    <Card title="Tendencia acumulada de ventas" error={salesState.error} onRetry={reintentar}>
+                      {sinVentas ? vacioVentas : (
+                        <ChartBox label={`Gráfico de área con las ventas acumuladas. Total acumulado: ${formatoMoneda(ventasAcumuladas[ventasAcumuladas.length - 1].acumulado)}.`}>
+                          <ResponsiveContainer width="100%" height={240}>
+                            <AreaChart data={ventasAcumuladas}>
+                              <CartesianGrid strokeDasharray="3 3" stroke={COLOR.grid} />
+                              <XAxis dataKey="mes" tick={TICK} minTickGap={4} />
+                              <YAxis tick={TICK} width={88} tickFormatter={formatoCompacto} />
+                              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [formatoMoneda(Number(v)), "Acumulado"]} />
+                              <Area isAnimationActive={false} type="monotone" dataKey="acumulado" stroke={COLOR.primary} strokeWidth={3} fill={COLOR.primary} fillOpacity={0.12} />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </ChartBox>
+                      )}
+                    </Card>
+                  )}
+                </div>
+
+                {cargandoClientes ? <ChartSkeleton /> : (
+                  <Card title="Top 5 clientes por monto de compra" error={clientesState.error} onRetry={reintentar}>
+                    {topClientes.length === 0 ? (
+                      <EmptyState
+                        icon={<Users size={24} />}
+                        title="Todavía no hay clientes con compras"
+                        description="El ranking aparece cuando cargas un archivo de ventas en Excel."
+                        actionLabel="Ir a Cargar Excel"
+                        onAction={irACargar}
+                      />
+                    ) : (
+                      <ChartBox label={`Gráfico de barras con los ${topClientes.length} clientes que más compran. El primero es ${topClientes[0].nombre_cliente} con ${formatoMoneda(topClientes[0].monto_total)}.`}>
+                        <ResponsiveContainer width="100%" height={240}>
+                          <BarChart data={topClientes} layout="vertical" margin={{ left: 0, right: 28 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke={COLOR.grid} horizontal={false} />
+                            <XAxis type="number" tick={TICK} tickFormatter={formatoCompacto} />
+                            <YAxis type="category" dataKey="nombre_cliente" width={170} tick={TICK}
+                              tickFormatter={(v) => recortar(String(v), 24)} />
+                            <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [formatoMoneda(Number(v)), "Monto"]} />
+                            <Bar isAnimationActive={false} dataKey="monto_total" fill={COLOR.primary} radius={[0,4,4,0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </ChartBox>
+                    )}
                   </Card>
                 )}
-              </div>
+              </>
+            )}
 
-              {clientesState.loading && !clientesState.data ? <ChartSkeleton /> : (
-                <Card title="Top 5 clientes por monto de compra" error={clientesState.error}>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={topClientes} layout="vertical" margin={{ left:10 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize:13 }} tickFormatter={(v) => `$${(Number(v)/1000000).toFixed(1)}M`} />
-                      <YAxis type="category" dataKey="nombre_cliente" width={160} tick={{ fontSize:12 }} />
-                      <Tooltip formatter={(v: any) => [formatoMoneda(Number(v)), "Monto"]} />
-                      <Bar dataKey="monto_total" fill="#534AB7" radius={[0,4,4,0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Card>
-              )}
-            </>
-          )}
+            {/* ================= PESTAÑA CLIENTES ================= */}
+            {activeTab === "clientes" && (
+              <>
+                <div className="dash-grid">
+                  {churnState.loading && !churnState.data ? <ChartSkeleton height={200} /> : (
+                    <Card title="Riesgo de abandono" error={churnState.error} onRetry={reintentar}>
+                      {totalRiesgo === 0 ? (
+                        <EmptyState
+                          title="Sin datos de riesgo todavía"
+                          description="El riesgo de abandono se calcula cuando hay historial de compras cargado."
+                          actionLabel="Ir a Cargar Excel"
+                          onAction={irACargar}
+                        />
+                      ) : (
+                        <>
+                          <ChartBox label={`Gráfico circular de riesgo de abandono: ${RIESGO_PIE_DATA.map((r) => `${r.name} ${r.value}`).join(", ")} clientes.`}>
+                            <div style={{ maxWidth:220, margin:"0 auto" }}>
+                              <ResponsiveContainer width="100%" height={200}>
+                                <PieChart>
+                                  <Pie isAnimationActive={false} data={RIESGO_PIE_DATA} dataKey="value" nameKey="name" innerRadius={55} outerRadius={80}
+                                    paddingAngle={2} stroke="#ffffff" strokeWidth={2}>
+                                    {RIESGO_PIE_DATA.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                                  </Pie>
+                                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: any) => [`${v} clientes`, name]} />
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </ChartBox>
+                          <ul style={{ margin:"var(--s-4) 0 0", padding:0, listStyle:"none", display:"flex", flexDirection:"column", gap:"var(--s-2)" }}>
+                            {RIESGO_PIE_DATA.map((r) => (
+                              <li key={r.name} className="dash-legend-row">
+                                <span style={{ display:"flex", alignItems:"center", gap:"var(--s-2)", color:"var(--c-ink-2)" }}>
+                                  <span aria-hidden="true" style={{ width:12, height:12, borderRadius:3, background:r.color, display:"inline-block" }} />
+                                  {r.name}
+                                </span>
+                                <span style={{ fontWeight:600, fontVariantNumeric:"tabular-nums" }}>
+                                  {r.value} clientes · {Math.round((r.value / totalRiesgo) * 100)}%
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </Card>
+                  )}
 
-          {/* ================= PESTAÑA CLIENTES ================= */}
-          {activeTab === "clientes" && (
-            <>
-              <div className="grid-auto-wide">
-                {churnState.loading && !churnState.data ? <ChartSkeleton height={200} /> : (
-                  <Card title="Riesgo de abandono" error={churnState.error}>
-                    <div style={{ maxWidth:220, margin:"0 auto" }}>
-                      <ResponsiveContainer width="100%" height={200}>
-                        <PieChart>
-                          <Pie data={RIESGO_PIE_DATA} dataKey="value" nameKey="name" innerRadius={55} outerRadius={80} paddingAngle={2}>
-                            {RIESGO_PIE_DATA.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                          </Pie>
-                          <Tooltip formatter={(v: any, name: any) => [`${v} clientes`, name]} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div style={{ marginTop:"1rem", display:"flex", flexDirection:"column", gap:8 }}>
-                      {RIESGO_PIE_DATA.map((r) => (
-                        <div key={r.name} style={{ display:"flex", justifyContent:"space-between", fontSize:13 }}>
-                          <span style={{ display:"flex", alignItems:"center", gap:6, color:"#555" }}>
-                            <span style={{ width:8, height:8, borderRadius:"50%", background:r.color, display:"inline-block" }} />
-                            {r.name}
-                          </span>
-                          <span style={{ fontWeight:500 }}>{r.value} clientes</span>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                )}
+                  {cargandoClientes ? <ChartSkeleton height={280} /> : (
+                    <Card title="Clientes por ciudad" error={clientesState.error} onRetry={reintentar}>
+                      {clientesPorCiudad.length === 0 ? (
+                        <EmptyState
+                          icon={<Users size={24} />}
+                          title="Todavía no hay clientes registrados"
+                          description="Los clientes aparecen cuando cargas un archivo de ventas en Excel."
+                          actionLabel="Ir a Cargar Excel"
+                          onAction={irACargar}
+                        />
+                      ) : (
+                        <ChartBox label={`Gráfico de barras con la cantidad de clientes en ${clientesPorCiudad.length} ${clientesPorCiudad.length === 1 ? "ciudad" : "ciudades"}.`}>
+                          <ResponsiveContainer width="100%" height={280}>
+                            <BarChart data={clientesPorCiudad}>
+                              <CartesianGrid strokeDasharray="3 3" stroke={COLOR.grid} />
+                              <XAxis dataKey="ciudad" tick={TICK} />
+                              <YAxis tick={TICK} allowDecimals={false} />
+                              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} clientes`, "Clientes"]} />
+                              <Bar isAnimationActive={false} dataKey="cantidad" fill={COLOR.primary} radius={[4,4,0,0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </ChartBox>
+                      )}
+                    </Card>
+                  )}
+                </div>
 
-                {clientesState.loading && !clientesState.data ? <ChartSkeleton height={280} /> : (
-                  <Card title="Clientes por ciudad" error={clientesState.error}>
-                    <ResponsiveContainer width="100%" height={280}>
-                      <BarChart data={clientesPorCiudad}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                        <XAxis dataKey="ciudad" tick={{ fontSize:13 }} />
-                        <YAxis tick={{ fontSize:13 }} allowDecimals={false} />
-                        <Tooltip formatter={(v: any) => [`${v} clientes`, "Clientes"]} />
-                        <Bar dataKey="cantidad" fill="#16163a" radius={[4,4,0,0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </Card>
-                )}
-              </div>
-
-              {clientesState.loading && !clientesState.data ? <ChartSkeleton height={200} /> : (
-                <Card title="Clientes en riesgo" error={clientesState.error}>
-                  <div className="table-scroll" style={{ border:"0.5px solid #e0e0e0", borderRadius:12 }}>
-                    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, minWidth:420 }}>
-                      <thead>
-                        <tr style={{ background:"#f9f9f9", borderBottom:"0.5px solid #e0e0e0" }}>
-                          {["Cliente","Ciudad","Monto total","Última compra"].map((h) => (
-                            <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontWeight:500, color:"#666" }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {clientesEnRiesgo.length === 0 ? (
-                          <tr><td colSpan={4} style={{ padding:"1.5rem", textAlign:"center", color:"#aaa" }}>
-                            No hay clientes en riesgo actualmente
-                          </td></tr>
-                        ) : clientesEnRiesgo.map((c, i) => (
-                          <tr key={c.id_cliente} style={{ borderBottom:"0.5px solid #f0f0f0", background: i % 2 === 0 ? "#fff":"#fafafa" }}>
-                            <td style={{ padding:"12px 16px", fontWeight:500 }}>{c.nombre_cliente}</td>
-                            <td style={{ padding:"12px 16px", color:"#555" }}>{c.ciudad || "—"}</td>
-                            <td style={{ padding:"12px 16px", color:"#0F6E56", fontWeight:500 }}>{formatoMoneda(c.monto_total)}</td>
-                            <td style={{ padding:"12px 16px", color:"#555" }}>
-                              {c.ultima_compra ? new Date(c.ultima_compra).toLocaleDateString("es-CO") : "—"}
-                            </td>
+                {cargandoClientes ? <ChartSkeleton height={200} /> : (
+                  <Card title="Clientes en riesgo" error={clientesState.error} onRetry={reintentar}>
+                    <div className="table-scroll" style={{ border:"1px solid var(--c-line)", borderRadius:"var(--r-sm)" }}>
+                      <table className="table" style={{ minWidth:480 }}>
+                        <caption style={{ position:"absolute", width:1, height:1, overflow:"hidden", clip:"rect(0 0 0 0)" }}>
+                          Clientes en riesgo de abandono
+                        </caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">Cliente</th>
+                            <th scope="col">Ciudad</th>
+                            <th scope="col" className="num">Monto total</th>
+                            <th scope="col">Última compra</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              )}
-            </>
-          )}
+                        </thead>
+                        <tbody>
+                          {clientesEnRiesgo.length === 0 ? (
+                            <tr><td colSpan={4} style={{ padding:"var(--s-5)", textAlign:"center", color:"var(--c-muted)" }}>
+                              No hay clientes en riesgo actualmente
+                            </td></tr>
+                          ) : clientesEnRiesgo.map((c) => (
+                            <tr key={c.id_cliente}>
+                              <td style={{ fontWeight:600, color:"var(--c-ink)" }}>{c.nombre_cliente}</td>
+                              <td>{c.ciudad || "—"}</td>
+                              <td className="num">{formatoMoneda(c.monto_total)}</td>
+                              <td>{c.ultima_compra ? new Date(c.ultima_compra).toLocaleDateString("es-CO") : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                )}
+              </>
+            )}
+          </div>
         </main>
       </div>
     </div>

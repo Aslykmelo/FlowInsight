@@ -23,6 +23,11 @@ Centraliza los pedidos y clientes que hoy se manejan en archivos Excel, calcula 
 - No hay registro de logs de auditoría ni cifrado de datos de clientes a nivel de aplicación.
 - El CORS del backend solo admite `http://localhost:<puerto>`.
 - La recuperación de contraseña envía SMS reales solo si se configura un proveedor (Twilio, variables `TWILIO_*`); por defecto el código se escribe en el log del servidor. El envío real no se ha verificado contra el proveedor.
+- Si la cuenta no tiene teléfono (o no hay proveedor de SMS), el código de recuperación se envía al correo de la cuenta. El correo real requiere configurar `EMAIL_PROVIDER` (Resend o SMTP) y verificar el dominio remitente; sin eso solo queda en el log del servidor. El envío real no se ha verificado contra ningún proveedor.
+- Los informes se generan en memoria en cada descarga (no se guardan archivos en disco, porque Railway tiene sistema de archivos efímero).
+- El mapa de clientes ubica cada punto dentro de su localidad (centroide más un desplazamiento fijo de hasta ~1,2 km): los datos cargados no traen coordenadas, por lo que la posición es aproximada.
+- Los botones de las promociones ("Hablar con un asesor", "Hacer un pedido") solo aparecen si se configuran `EMPRESA_WHATSAPP` o `EMPRESA_PEDIDO_URL`. El envío de promociones al correo del cliente está apagado por defecto (`PROMO_ENVIO_REAL`); la vista previa va al correo del usuario.
+- El asistente de ayuda de la aplicación no es un modelo de lenguaje: responde con una guía escrita a mano sobre la aplicación.
 - La recuperación de contraseña limita los intentos por cuenta (5 por código, un código nuevo por minuto), pero no limita por dirección IP.
 
 ## Stack

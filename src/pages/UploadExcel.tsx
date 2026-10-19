@@ -2,9 +2,10 @@ import { API_URL } from "../config";
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios, { AxiosError } from "axios";
+import {
+  AlertCircle, ArrowRight, CheckCircle2, FileSpreadsheet, Loader2, UploadCloud,
+} from "lucide-react";
 import Sidebar from "../components/Sidebar";
-import LoadingSpinner from "../components/LoadingSpinner";
-import ErrorMessage from "../components/ErrorMessage";
 
 // ─── Types ────────────────────────────────────────────
 type Status = "idle" | "dragging" | "configurando" | "uploading" | "success" | "error";
@@ -47,6 +48,92 @@ const COLUMNAS_DETECTADAS_MOCK = [
   "Precio Unit.",
   "Cantidad Comprada",
 ];
+
+const INSTRUCCIONES = [
+  { col: "cliente_nombre", desc: "Nombre del cliente" },
+  { col: "cliente_correo", desc: "Correo del cliente (identifica si ya existe)" },
+  { col: "producto_nombre", desc: "Nombre del producto" },
+  { col: "producto_precio", desc: "Precio unitario del producto" },
+  { col: "cantidad", desc: "Cantidad comprada" },
+];
+
+const PASOS = ["Elegir archivo", "Asociar columnas", "Cargar"];
+
+// Convierte "Filas procesadas: 10 · Clientes nuevos: 2" en pares etiqueta/valor
+const partesResumen = (mensaje?: string) =>
+  (mensaje ?? "")
+    .split(" · ")
+    .map((parte) => {
+      const i = parte.lastIndexOf(": ");
+      return i === -1 ? { etiqueta: parte, valor: "" } : { etiqueta: parte.slice(0, i), valor: parte.slice(i + 2) };
+    })
+    .filter((p) => p.etiqueta);
+
+// Estilos propios de esta pantalla (el resto sale de design.css)
+const PAGE_CSS = `
+  @keyframes ux-spin { to { transform: rotate(360deg); } }
+  .ux-spin { animation: ux-spin 0.8s linear infinite; }
+  .ux-col { width: 100%; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--s-5); }
+  .ux-steps { display: flex; gap: var(--s-2); margin: 0; padding: 0; list-style: none; }
+  .ux-step { flex: 1; display: flex; align-items: center; gap: var(--s-2); min-width: 0; padding-top: var(--s-2);
+    border-top: 3px solid var(--c-line-strong); font-size: 13px; font-weight: 600; color: var(--c-muted); }
+  .ux-step[data-state="done"], .ux-step[data-state="current"] { border-top-color: var(--c-primary); }
+  .ux-step[data-state="current"] { color: var(--c-ink); }
+  .ux-step-n { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center;
+    justify-content: center; font-size: 12px; font-variant-numeric: tabular-nums; background: var(--c-line); color: var(--c-ink-2); }
+  .ux-step[data-state="current"] .ux-step-n, .ux-step[data-state="done"] .ux-step-n { background: var(--c-primary); color: #fff; }
+  @media (max-width: 480px) { .ux-step-label { display: none; } .ux-step[data-state="current"] .ux-step-label { display: inline; } }
+  .ux-consent { display: flex; align-items: flex-start; gap: var(--s-3); padding: var(--s-4); cursor: pointer;
+    background: var(--c-warn-soft); border: 1px solid var(--c-accent); border-radius: var(--r-md);
+    font-size: 14px; line-height: 1.5; color: var(--c-warn); }
+  .ux-consent input { flex-shrink: 0; width: 20px; height: 20px; margin: 2px 0 0; cursor: pointer; accent-color: var(--c-primary); }
+  .ux-drop { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); padding: var(--s-6) var(--s-5);
+    text-align: center; border: 2px dashed var(--c-line-strong); border-radius: var(--r-lg); background: var(--c-surface);
+    cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+  .ux-drop:hover, .ux-drop:focus-within { border-color: var(--c-primary); }
+  .ux-drop:focus-within { outline: 2px solid var(--c-primary); outline-offset: 2px; }
+  .ux-drop[data-over="true"] { border-color: var(--c-primary); background: var(--c-primary-soft); }
+  .ux-drop[data-locked="true"] { cursor: not-allowed; background: var(--c-bg); }
+  .ux-drop[data-locked="true"]:hover { border-color: var(--c-line-strong); }
+  .ux-drop-icon { width: 56px; height: 56px; border-radius: var(--r-md); display: flex; align-items: center;
+    justify-content: center; background: var(--c-primary-soft); color: var(--c-primary); }
+  .ux-drop[data-locked="true"] .ux-drop-icon { background: var(--c-line); color: var(--c-muted); }
+  .ux-drop-title { margin: 0; font-size: 16px; font-weight: 700; color: var(--c-ink); }
+  .ux-drop-sub { margin: 0; font-size: 14px; color: var(--c-muted); }
+  .ux-drop .btn[aria-disabled="true"] { opacity: 1; background: var(--c-line); border-color: var(--c-line); color: var(--c-muted); cursor: not-allowed; }
+  .ux-hint { font-size: 12px; font-weight: 600; color: var(--c-muted); background: var(--c-bg);
+    border: 1px solid var(--c-line); padding: 4px 12px; border-radius: 999px; }
+  .ux-file { display: flex; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-4); font-size: 14px;
+    color: var(--c-muted); word-break: break-word; }
+  .ux-maprow { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: var(--s-3);
+    padding: var(--s-3) 0; border-bottom: 1px solid var(--c-line); }
+  .ux-maprow label { font-size: 14px; font-weight: 600; color: var(--c-ink); }
+  .ux-maprow .input[aria-invalid="true"] { border-color: var(--c-bad); }
+  @media (max-width: 520px) { .ux-maprow { grid-template-columns: 1fr; gap: var(--s-2); } }
+  .ux-btns { display: flex; gap: var(--s-3); flex-wrap: wrap; margin-top: var(--s-5); }
+  .ux-btns .btn { flex: 1 1 140px; }
+  .ux-progress-head { display: flex; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-2);
+    font-size: 14px; color: var(--c-ink-2); }
+  .ux-progress-head span:first-child { display: flex; align-items: center; gap: var(--s-2); min-width: 0; word-break: break-word; }
+  .ux-progress-head span:last-child { font-weight: 700; color: var(--c-primary); font-variant-numeric: tabular-nums; }
+  .ux-track { height: 8px; border-radius: 99px; background: var(--c-line); overflow: hidden; }
+  .ux-bar { height: 100%; border-radius: 99px; background: var(--c-primary); transition: width 0.3s; }
+  .ux-processing { display: flex; align-items: center; gap: var(--s-3); font-size: 14px; color: var(--c-ink-2); }
+  .ux-result { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); text-align: center; }
+  .ux-result h2 { margin: 0; font-size: 18px; }
+  .ux-result-icon { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .ux-stats { width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--s-3); margin: var(--s-2) 0 0; }
+  .ux-stat { background: var(--c-bg); border: 1px solid var(--c-line); border-radius: var(--r-sm); padding: var(--s-3); text-align: left; }
+  .ux-stat dt { margin: 0; font-size: 12px; font-weight: 600; color: var(--c-muted); }
+  .ux-stat dd { margin: 2px 0 0; font-size: 20px; font-weight: 700; color: var(--c-ink); font-variant-numeric: tabular-nums; }
+  .ux-error { display: flex; align-items: flex-start; gap: var(--s-3); flex-wrap: wrap; padding: var(--s-4); font-size: 14px; }
+  .ux-error p { margin: 0; flex: 1 1 240px; font-weight: 600; }
+  .ux-cols { list-style: none; margin: 0; padding: 0; }
+  .ux-cols li { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2) var(--s-3); padding: var(--s-2) 0; border-bottom: 1px solid var(--c-line); }
+  .ux-cols li:last-child { border-bottom: none; }
+  .ux-cols code { min-width: 140px; text-align: center; font-family: inherit; font-size: 12px; font-weight: 700; }
+  .ux-cols span { font-size: 14px; color: var(--c-ink-2); }
+`;
 
 // ─── Upload Page ──────────────────────────────────────
 export default function UploadExcel() {
@@ -115,7 +202,7 @@ export default function UploadExcel() {
             `Pedidos creados: ${data.pedidos_creados}` +
             (data.filas_con_error > 0 ? ` · Filas con error: ${data.filas_con_error}` : "") +
             (data.filas_duplicadas > 0 ? ` · Duplicadas (omitidas): ${data.filas_duplicadas}` : "");
-            
+
       setState({ status: "success", file, progress: 100, message: resumen });
     } catch (err) {
       const axiosError = err as AxiosError<{ detail?: string }>;
@@ -157,222 +244,221 @@ export default function UploadExcel() {
 
   const enConfiguracionOSubida = state.status === "configurando" || state.status === "uploading";
 
+  // Paso actual del proceso (0 = elegir archivo, 1 = asociar columnas, 2 = cargar)
+  const pasoActual =
+    state.status === "configurando" ? 1 : state.status === "uploading" || state.status === "success" ? 2 : 0;
+  const resumen = partesResumen(state.message);
+
   return (
-    <div className="app-shell" style={{ background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+    <div className="app-shell">
+      <style>{PAGE_CSS}</style>
       <Sidebar />
 
       {/* Main */}
       <div className="app-main">
-        <header style={{ background:"#fff", borderBottom:"0.5px solid #e0e0e0",
-          padding:"0.875rem 1.5rem", display:"flex", alignItems:"center", gap:12 }}>
+        <header className="page-header">
           <div>
-            <h1 style={{ margin:0, fontSize:20, fontWeight:500 }}>Cargar archivo Excel</h1>
-            <p style={{ margin:0, fontSize:13, color:"#888" }}>
-              Sube el archivo de ventas para actualizar el dashboard
-            </p>
+            <h1>Cargar archivo Excel</h1>
+            <p>Sube el archivo de ventas para actualizar el dashboard</p>
           </div>
         </header>
 
-        <main style={{ padding:"2rem", display:"flex", flexDirection:"column",
-          alignItems:"center", gap:"1.5rem" }}>
+        <main className="page-body">
+          <div className="ux-col">
 
-          {/* Confirmación de autorización de datos */}
-          {!enConfiguracionOSubida && state.status !== "success" && (
-            <div style={{ width:"100%", maxWidth:560, background:"#FAEEDA",
-              border:"0.5px solid #EF9F27", borderRadius:12, padding:"1rem 1.25rem",
-              display:"flex", alignItems:"flex-start", gap:12 }}>
-              <input
-                type="checkbox"
-                id="autorizacion"
-                checked={autorizado}
-                onChange={(e) => setAutorizado(e.target.checked)}
-                style={{ marginTop:3, width:16, height:16, cursor:"pointer", flexShrink:0 }}
-              />
-              <label htmlFor="autorizacion" style={{ fontSize:13, color:"#7A4A0A", cursor:"pointer", lineHeight:1.5 }}>
-                Confirmo que cuento con la <strong>autorización expresa</strong> de los clientes incluidos
-                en este archivo para el tratamiento de sus datos personales, conforme a la Ley 1581 de 2012.
+            <ol className="ux-steps" aria-label="Pasos para cargar el archivo">
+              {PASOS.map((paso, i) => {
+                const estado = i < pasoActual || state.status === "success" ? "done" : i === pasoActual ? "current" : "todo";
+                return (
+                  <li key={paso} className="ux-step" data-state={estado} aria-current={estado === "current" ? "step" : undefined}>
+                    <span className="ux-step-n" aria-hidden="true">{i + 1}</span>
+                    <span className="ux-step-label">{paso}</span>
+                  </li>
+                );
+              })}
+            </ol>
+
+            {/* Confirmación de autorización de datos */}
+            {!enConfiguracionOSubida && state.status !== "success" && (
+              <label htmlFor="autorizacion" className="ux-consent">
+                <input
+                  type="checkbox"
+                  id="autorizacion"
+                  checked={autorizado}
+                  onChange={(e) => setAutorizado(e.target.checked)}
+                />
+                <span>
+                  Confirmo que cuento con la <strong>autorización expresa</strong> de los clientes incluidos
+                  en este archivo para el tratamiento de sus datos personales, conforme a la Ley 1581 de 2012.
+                </span>
               </label>
-            </div>
-          )}
+            )}
 
-          {/* Drop zone */}
-          {(state.status === "idle" || state.status === "dragging") && (
-            <label
-              htmlFor="file-input"
-              onDragOver={(e) => { e.preventDefault(); if (autorizado) setState((p) => ({ ...p, status:"dragging" })); }}
-              onDragLeave={() => setState((p) => ({ ...p, status:"idle" }))}
-              onDrop={handleDrop}
-              style={{
-                width:"100%", maxWidth:560,
-                border: state.status === "dragging" ? "2px dashed #534AB7" : "2px dashed #ccc",
-                borderRadius:16, padding:"3rem 2rem",
-                display:"flex", flexDirection:"column", alignItems:"center", gap:16,
-                background: state.status === "dragging" ? "#EEEDFE" : autorizado ? "#fff" : "#f5f5f7",
-                opacity: autorizado ? 1 : 0.6,
-                transition:"all 0.2s", cursor: autorizado ? "pointer" : "not-allowed",
-              }}
-            >
-              <span aria-hidden="true" style={{ fontSize:48 }}>📂</span>
-              <p style={{ margin:0, fontSize:16, fontWeight:500, color:"#333" }}>
-                {autorizado ? "Arrastra tu archivo aquí" : "Marca la casilla de autorización para continuar"}
-              </p>
-              <p style={{ margin:0, fontSize:13, color:"#888" }}>
-                o haz clic para seleccionarlo
-              </p>
-              <span style={{ fontSize:12, color:"#aaa",
-                background:"#f5f5f7", padding:"4px 12px", borderRadius:20 }}>
-                .xlsx / .xls — máx. 10 MB
-              </span>
-              <input
-                id="file-input"
-                type="file"
-                accept=".xlsx,.xls"
-                disabled={!autorizado}
-                style={srOnly}
-                onChange={handleInput}
-              />
-            </label>
-          )}
+            {/* Drop zone */}
+            {(state.status === "idle" || state.status === "dragging") && (
+              <label
+                htmlFor="file-input"
+                className="ux-drop"
+                data-over={state.status === "dragging"}
+                data-locked={!autorizado}
+                onDragOver={(e) => { e.preventDefault(); if (autorizado) setState((p) => ({ ...p, status:"dragging" })); }}
+                onDragLeave={() => setState((p) => ({ ...p, status:"idle" }))}
+                onDrop={handleDrop}
+              >
+                <span className="ux-drop-icon" aria-hidden="true"><UploadCloud size={28} /></span>
+                <p className="ux-drop-title">
+                  {autorizado ? "Arrastra tu archivo aquí" : "Marca la casilla de autorización para continuar"}
+                </p>
+                <p className="ux-drop-sub">o haz clic para seleccionarlo</p>
+                <span className="btn btn-primary" aria-hidden="true" aria-disabled={!autorizado}>
+                  Seleccionar archivo
+                </span>
+                <span className="ux-hint">.xlsx / .xls — máx. 10 MB</span>
+                <input
+                  id="file-input"
+                  type="file"
+                  accept=".xlsx,.xls"
+                  disabled={!autorizado}
+                  style={srOnly}
+                  onChange={handleInput}
+                />
+              </label>
+            )}
 
-          {/* Configurar columnas */}
-          {state.status === "configurando" && state.file && (
-            <div style={{ width:"100%", maxWidth:560, background:"#fff",
-              border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1.5rem" }}>
-              <p style={{ margin:"0 0 4px", fontSize:15, fontWeight:500 }}>Configurar columnas</p>
-              <p style={{ margin:"0 0 16px", fontSize:13, color:"#888" }}>
-                <span aria-hidden="true">📄</span> {state.file.name} — asocia cada campo con la columna correspondiente del archivo
-              </p>
+            {/* Configurar columnas */}
+            {state.status === "configurando" && state.file && (
+              <section className="card" aria-labelledby="cfg-titulo">
+                <h2 id="cfg-titulo">Configurar columnas</h2>
+                <p className="ux-file">
+                  <FileSpreadsheet size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
+                  <span>{state.file.name} — asocia cada campo con la columna correspondiente del archivo</span>
+                </p>
 
-              {CAMPOS_SISTEMA.map((campo) => (
-                <div key={campo.key} style={{ display:"flex", alignItems:"center", gap:12,
-                  padding:"8px 0", borderBottom:"0.5px solid #f0f0f0" }}>
-                  <label htmlFor={`campo-${campo.key}`} style={{ flex:1, fontSize:13, color:"#333", fontWeight:500 }}>
-                    {campo.label}
-                  </label>
-                  <select
-                    id={`campo-${campo.key}`}
-                    value={mapeo[campo.key] ?? ""}
-                    aria-describedby={mapeoError ? "mapeo-error" : undefined}
-                    aria-invalid={Boolean(mapeoError && !mapeo[campo.key])}
-                    onChange={(e) => setMapeo((prev) => ({ ...prev, [campo.key]: e.target.value }))}
-                    style={{ flex:1, border:"0.5px solid #e0e0e0", borderRadius:8, padding:"7px 10px",
-                      fontSize:13, outline:"none", background:"#fff", boxSizing:"border-box" }}
-                  >
-                    <option value="">-- Selecciona una columna --</option>
-                    {COLUMNAS_DETECTADAS_MOCK.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+                {CAMPOS_SISTEMA.map((campo) => (
+                  <div key={campo.key} className="ux-maprow">
+                    <label htmlFor={`campo-${campo.key}`}>{campo.label}</label>
+                    <select
+                      id={`campo-${campo.key}`}
+                      className="input"
+                      value={mapeo[campo.key] ?? ""}
+                      aria-describedby={mapeoError ? "mapeo-error" : undefined}
+                      aria-invalid={Boolean(mapeoError && !mapeo[campo.key])}
+                      onChange={(e) => setMapeo((prev) => ({ ...prev, [campo.key]: e.target.value }))}
+                    >
+                      <option value="">-- Selecciona una columna --</option>
+                      {COLUMNAS_DETECTADAS_MOCK.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+
+                {mapeoError && (
+                  <div id="mapeo-error" role="alert" aria-live="assertive" className="notice notice-bad"
+                    style={{ marginTop: "var(--s-4)", display: "flex", alignItems: "center", gap: "var(--s-2)" }}>
+                    <AlertCircle size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
+                    {mapeoError}
+                  </div>
+                )}
+
+                <div className="ux-btns">
+                  <button type="button" onClick={reset} className="btn">
+                    Cancelar
+                  </button>
+                  <button type="button" onClick={confirmarYSubir} className="btn btn-primary">
+                    Confirmar y subir
+                  </button>
                 </div>
-              ))}
+              </section>
+            )}
 
-              {mapeoError && (
-                <div id="mapeo-error" role="alert" aria-live="assertive"
-                  style={{ background:"#FAECE7", border:"0.5px solid #E24B4A", borderRadius:8,
-                  padding:"10px 14px", fontSize:13, color:"#993C1D", marginTop:14 }}>
-                  <span aria-hidden="true">⚠️</span> {mapeoError}
+            {/* Progreso / procesando */}
+            {state.status === "uploading" && (
+              <section className="card" aria-label="Progreso de la carga">
+                {state.progress < 100 ? (
+                  <>
+                    <div className="ux-progress-head">
+                      <span>
+                        <FileSpreadsheet size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
+                        {state.file?.name}
+                      </span>
+                      <span>{state.progress}%</span>
+                    </div>
+                    <div
+                      className="ux-track"
+                      role="progressbar"
+                      aria-label="Progreso de la carga del archivo"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={state.progress}
+                    >
+                      <div className="ux-bar" style={{ width: `${state.progress}%` }} />
+                    </div>
+                  </>
+                ) : (
+                  <div role="status" aria-live="polite" className="ux-processing">
+                    <Loader2 size={24} className="ux-spin" aria-hidden="true" style={{ color: "var(--c-primary)" }} />
+                    Procesando archivo en el servidor...
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Éxito */}
+            {state.status === "success" && (
+              <section role="status" aria-live="polite" className="card ux-result">
+                <span className="ux-result-icon" aria-hidden="true"
+                  style={{ background: "var(--c-ok-soft)", color: "var(--c-ok)" }}>
+                  <CheckCircle2 size={32} />
+                </span>
+                <h2 style={{ color: "var(--c-ok)" }}>¡Archivo cargado exitosamente!</h2>
+                <dl className="ux-stats">
+                  {resumen.map((p) => (
+                    <div key={p.etiqueta} className="ux-stat">
+                      <dt>{p.etiqueta}</dt>
+                      {p.valor && <dd>{p.valor}</dd>}
+                    </div>
+                  ))}
+                </dl>
+                <div className="ux-btns" style={{ width: "100%" }}>
+                  <button type="button" onClick={reset} className="btn btn-outline">
+                    Cargar otro archivo
+                  </button>
+                  <button type="button" onClick={() => navigate("/dashboard")} className="btn btn-primary">
+                    Ver dashboard
+                    <ArrowRight size={18} aria-hidden="true" />
+                  </button>
                 </div>
-              )}
+              </section>
+            )}
 
-              <div style={{ display:"flex", gap:12, marginTop:18 }}>
-                <button onClick={reset} style={{ flex:1, background:"#fff", color:"#555",
-                  border:"0.5px solid #e0e0e0", borderRadius:8, padding:"10px", cursor:"pointer", fontSize:14 }}>
-                  Cancelar
-                </button>
-                <button onClick={confirmarYSubir} style={{ flex:1, background:"#534AB7", color:"#fff",
-                  border:"none", borderRadius:8, padding:"10px", cursor:"pointer", fontSize:14, fontWeight:500 }}>
-                  Confirmar y subir
+            {/* Error */}
+            {state.status === "error" && (
+              <div role="alert" aria-live="assertive" className="notice notice-bad ux-error">
+                <AlertCircle size={20} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} />
+                <p>{state.message || "No fue posible procesar el archivo."}</p>
+                <button type="button" className="btn btn-danger" onClick={state.file ? reintentar : reset}>
+                  {state.file ? "Reintentar" : "Elegir otro archivo"}
                 </button>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Progreso / procesando */}
-          {state.status === "uploading" && (
-            <div style={{ width:"100%", maxWidth:560, background:"#fff",
-              border:"0.5px solid #e0e0e0", borderRadius:12,
-              padding: state.progress < 100 ? "1.5rem" : 0 }}>
-              {state.progress < 100 ? (
-                <>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                    <span style={{ fontSize:14, color:"#555" }}><span aria-hidden="true">📄</span> {state.file?.name}</span>
-                    <span style={{ fontSize:14, fontWeight:500, color:"#534AB7" }}>{state.progress}%</span>
-                  </div>
-                  <div style={{ background:"#f0f0f0", borderRadius:99, height:8 }}>
-                    <div style={{ background:"#534AB7", borderRadius:99, height:8,
-                      width:`${state.progress}%`, transition:"width 0.3s" }} />
-                  </div>
-                </>
-              ) : (
-                <LoadingSpinner message="Procesando archivo en el servidor..." />
-              )}
-            </div>
-          )}
+            {/* Instrucciones — solo antes de elegir un archivo */}
+            {!enConfiguracionOSubida && state.status !== "success" && (
+              <section className="card" aria-labelledby="instr-titulo">
+                <h2 id="instr-titulo">¿Cómo debe estar estructurado el archivo?</h2>
+                <ul className="ux-cols">
+                  {INSTRUCCIONES.map((row) => (
+                    <li key={row.col}>
+                      <code className="chip">{row.col}</code>
+                      <span>{row.desc}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
-          {/* Éxito */}
-          {state.status === "success" && (
-            <div role="status" aria-live="polite" style={{ width:"100%", maxWidth:560, background:"#fff",
-              border:"0.5px solid #e0e0e0", borderRadius:12, padding:"2rem",
-              display:"flex", flexDirection:"column", alignItems:"center", gap:16 }}>
-              <span aria-hidden="true" style={{ fontSize:52 }}>✅</span>
-              <p style={{ margin:0, fontSize:17, fontWeight:500, color:"#0F6E56" }}>
-                ¡Archivo cargado exitosamente!
-              </p>
-              <p style={{ margin:0, fontSize:13, color:"#888", textAlign:"center" }}>
-                {state.message}
-              </p>
-              <div style={{ display:"flex", gap:12, marginTop:8 }}>
-                <button onClick={reset} style={{ background:"#fff", color:"#534AB7",
-                  border:"1px solid #534AB7", borderRadius:8,
-                  padding:"8px 20px", cursor:"pointer", fontSize:14 }}>
-                  Cargar otro archivo
-                </button>
-                <button onClick={() => navigate("/dashboard")} style={{ background:"#534AB7", color:"#fff",
-                  border:"none", borderRadius:8,
-                  padding:"8px 20px", cursor:"pointer", fontSize:14 }}>
-                  Ver dashboard →
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Error */}
-          {state.status === "error" && (
-            <div style={{ width:"100%", maxWidth:560 }}>
-              <ErrorMessage
-                message={state.message || "No fue posible procesar el archivo."}
-                onRetry={state.file ? reintentar : reset}
-              />
-            </div>
-          )}
-
-          {/* Instrucciones — solo antes de elegir un archivo */}
-          {!enConfiguracionOSubida && state.status !== "success" && (
-            <div style={{ width:"100%", maxWidth:560, background:"#fff",
-              border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1.25rem" }}>
-              <p style={{ margin:"0 0 12px", fontSize:14, fontWeight:500 }}>
-                ¿Cómo debe estar estructurado el archivo?
-              </p>
-              {[
-                { col:"cliente_nombre", desc:"Nombre del cliente" },
-                { col:"cliente_correo", desc:"Correo del cliente (identifica si ya existe)" },
-                { col:"producto_nombre", desc:"Nombre del producto" },
-                { col:"producto_precio", desc:"Precio unitario del producto" },
-                { col:"cantidad", desc:"Cantidad comprada" },
-              ].map(row => (
-                <div key={row.col} style={{ display:"flex", alignItems:"center",
-                  gap:12, padding:"6px 0", borderBottom:"0.5px solid #f0f0f0" }}>
-                  <span style={{ background:"#EEEDFE", color:"#534AB7",
-                    borderRadius:6, padding:"2px 10px", fontSize:12,
-                    fontWeight:500, minWidth:120, textAlign:"center" }}>
-                    {row.col}
-                  </span>
-                  <span style={{ fontSize:13, color:"#555" }}>{row.desc}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
+          </div>
         </main>
       </div>
     </div>

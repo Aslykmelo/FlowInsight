@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import EmptyState from "../components/EmptyState";
+import ErrorMessage from "../components/ErrorMessage";
+import LoadingSpinner from "../components/LoadingSpinner";
+import { Search, X, CircleCheck, TriangleAlert, Clock, CircleDashed, Users, type LucideIcon } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────
 interface Client {
@@ -16,8 +19,11 @@ interface Client {
   ultimaCompraISO: string | null;   // fecha real, para filtrar/ordenar
   ultimaCompra: string;             // fecha ya formateada, para mostrar
   intervalo: number | null;
-  estado: "activo" | "en riesgo" | "inactivo";
+  estado: Estado;
 }
+
+// Mismas categorías que Promociones, el mapa y el cubo OLAP (por días desde la última compra).
+type Estado = "activo" | "ocasional" | "en_riesgo" | "sin_pedidos";
 
 interface ApiClienteResumen {
   id_cliente: number;
@@ -30,15 +36,27 @@ interface ApiClienteResumen {
   monto_total: number;
   ultima_compra: string | null;
   intervalo_promedio: number | null;
-  estado: "activo" | "en riesgo" | "inactivo";
+  estado: Estado;
 }
 
-
-const ESTADO_STYLE: Record<string, { color: string; bg: string }> = {
-  "activo":    { color:"#0F6E56", bg:"#E1F5EE" },
-  "en riesgo": { color:"#BA7517", bg:"#FAEEDA" },
-  "inactivo":  { color:"#993C1D", bg:"#FAECE7" },
+// Cada estado lleva color, ícono y texto: nunca se comunica solo con color.
+const ESTADO_STYLE: Record<Client["estado"], { chip: string; icon: LucideIcon; label: string; color: string }> = {
+  activo:      { chip: "chip chip-ok",      icon: CircleCheck,   label: "Activo",      color: "var(--c-ok)" },
+  ocasional:   { chip: "chip chip-warn",    icon: Clock,         label: "Ocasional",   color: "var(--c-warn)" },
+  en_riesgo:   { chip: "chip chip-bad",     icon: TriangleAlert, label: "En riesgo",   color: "var(--c-bad)" },
+  sin_pedidos: { chip: "chip chip-neutral", icon: CircleDashed,  label: "Sin pedidos", color: "var(--c-muted)" },
 };
+
+function EstadoChip({ estado }: { estado: Client["estado"] }) {
+  const s = ESTADO_STYLE[estado];
+  const Icono = s.icon;
+  return (
+    <span className={s.chip}>
+      <Icono size={14} aria-hidden="true" />
+      {s.label}
+    </span>
+  );
+}
 
 // ─── Helpers de formato ───────────────────────────────
 const formatoMoneda = (valor: number) =>
@@ -52,9 +70,55 @@ function fechaComparable(iso: string): string {
   return iso.slice(0, 10).replace(/-/g, "");
 }
 
+const SR_ONLY: React.CSSProperties = {
+  position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap",
+};
+
+const ESTILOS = `
+  .cli-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--s-4); }
+  .cli-summary-btn {
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+    min-height: 40px;
+  }
+  .cli-summary-btn:hover { border-color: var(--c-faint); }
+  .cli-summary-btn[aria-pressed="true"] { border-color: var(--c-primary); box-shadow: 0 0 0 2px var(--c-primary); }
+  .cli-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--s-4); align-items: end; }
+  .cli-search { position: relative; flex: 1 1 260px; min-width: 0; }
+  .cli-search .input { padding-left: 40px; }
+  .cli-search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--c-muted); pointer-events: none; }
+  .cli-seg { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+  .cli-seg .btn[aria-pressed="true"] { background: var(--c-primary-soft); border-color: var(--c-primary); color: var(--c-primary); }
+  .cli-avatar {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    background: var(--c-primary-soft); color: var(--c-primary);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+  }
+  .cli-row-btn { min-height: 40px; padding: 0 var(--s-3); font-size: 13px; white-space: nowrap; }
+  .cli-overlay {
+    position: fixed; inset: 0; z-index: 140; padding: var(--s-4);
+    background: rgba(27, 36, 48, 0.5);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cli-dialog {
+    background: var(--c-surface); border-radius: var(--r-lg); padding: var(--s-5);
+    width: 480px; max-width: 100%; max-height: 100%; overflow-y: auto;
+    box-shadow: var(--shadow-2);
+  }
+  .cli-dl { margin: 0; }
+  .cli-dl-row {
+    display: flex; justify-content: space-between; align-items: center; gap: var(--s-4);
+    padding: var(--s-3) 0; border-bottom: 1px solid var(--c-line); font-size: 14px;
+  }
+  .cli-dl-row dt { color: var(--c-muted); }
+  .cli-dl-row dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+`;
+
 // ─── Modal detalle cliente ────────────────────────────
 function ClientModal({ client, onClose }: { client: Client; onClose: () => void }) {
-  const s = ESTADO_STYLE[client.estado];
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -66,59 +130,53 @@ function ClientModal({ client, onClose }: { client: Client; onClose: () => void 
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  const filas = [
+    { label:"Teléfono",            value: client.telefono || "—" },
+    { label:"Correo",              value: client.correo || "—" },
+    { label:"Ciudad",              value: client.ciudad || "—" },
+    { label:"Total pedidos",       value: `${client.totalPedidos} pedidos` },
+    { label:"Monto total",         value: formatoMoneda(client.montoTotal) },
+    { label:"Última compra",       value: client.ultimaCompra },
+    { label:"Intervalo promedio",  value: client.intervalo != null ? `${client.intervalo} días entre compras` : "—" },
+  ];
+
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.4)",
-      display:"flex", alignItems:"center", justifyContent:"center", zIndex:100 }}
-      onClick={onClose}>
+    <div className="cli-overlay" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby="client-modal-title"
-        style={{ background:"#fff", borderRadius:16, padding:"2rem",
-        width:460, boxShadow:"0 8px 32px rgba(0,0,0,0.12)" }}
+        className="cli-dialog"
         onClick={e => e.stopPropagation()}>
 
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"1.5rem" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div aria-hidden="true" style={{ width:46, height:46, borderRadius:"50%", background:"#EEEDFE",
-              display:"flex", alignItems:"center", justifyContent:"center",
-              fontSize:18, fontWeight:500, color:"#534AB7", flexShrink:0 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"var(--s-3)", marginBottom:"var(--s-4)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:"var(--s-3)", minWidth:0 }}>
+            <div aria-hidden="true" className="cli-avatar" style={{ width:48, height:48, fontSize:18 }}>
               {client.nombre.charAt(0)}
             </div>
-            <div>
-              <p id="client-modal-title" style={{ margin:0, fontSize:16, fontWeight:500 }}>{client.nombre}</p>
-              <p style={{ margin:0, fontSize:12, color:"#888" }}>ID {client.id}</p>
+            <div style={{ minWidth:0 }}>
+              <h2 id="client-modal-title" style={{ margin:0, fontSize:18, fontWeight:700, overflowWrap:"anywhere" }}>{client.nombre}</h2>
+              <p style={{ margin:0, fontSize:13, color:"var(--c-muted)" }}>ID {client.id}</p>
             </div>
           </div>
-          <button ref={closeButtonRef} onClick={onClose} aria-label="Cerrar detalle de cliente"
-            style={{ background:"transparent", border:"none",
-            cursor:"pointer", fontSize:22, color:"#aaa", lineHeight:1 }}>×</button>
+          <button ref={closeButtonRef} type="button" className="btn" onClick={onClose}
+            aria-label="Cerrar detalle de cliente" style={{ width:40, padding:0, flexShrink:0 }}>
+            <X size={18} aria-hidden="true" />
+          </button>
         </div>
 
-        {[
-          { label:"Teléfono",            value: client.telefono || "—" },
-          { label:"Correo",              value: client.correo || "—" },
-          { label:"Ciudad",              value: client.ciudad || "—" },
-          { label:"Total pedidos",       value: `${client.totalPedidos} pedidos` },
-          { label:"Monto total",         value: formatoMoneda(client.montoTotal) },
-          { label:"Última compra",       value: client.ultimaCompra },
-          { label:"Intervalo promedio",  value: client.intervalo != null ? `${client.intervalo} días entre compras` : "—" },
-        ].map(row => (
-          <div key={row.label} style={{ display:"flex", justifyContent:"space-between",
-            padding:"10px 0", borderBottom:"0.5px solid #f0f0f0", fontSize:14 }}>
-            <span style={{ color:"#888" }}>{row.label}</span>
-            <span style={{ fontWeight:500 }}>{row.value}</span>
+        <dl className="cli-dl">
+          {filas.map(row => (
+            <div key={row.label} className="cli-dl-row">
+              <dt>{row.label}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          ))}
+          <div className="cli-dl-row" style={{ borderBottom:"none" }}>
+            <dt>Estado</dt>
+            <dd><EstadoChip estado={client.estado} /></dd>
           </div>
-        ))}
+        </dl>
 
-        <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", fontSize:14 }}>
-          <span style={{ color:"#888" }}>Estado</span>
-          <span style={{ fontSize:12, color:s.color, background:s.bg,
-            padding:"3px 10px", borderRadius:6, fontWeight:500 }}>
-            {client.estado.charAt(0).toUpperCase() + client.estado.slice(1)}
-          </span>
-        </div>
-
-        <button onClick={onClose} style={{ marginTop:"1.5rem", width:"100%",
-          background:"#534AB7", color:"#fff", border:"none", borderRadius:8,
-          padding:"10px", cursor:"pointer", fontSize:14 }}>
+        <button type="button" className="btn btn-outline" onClick={onClose}
+          style={{ marginTop:"var(--s-4)", width:"100%" }}>
           Cerrar
         </button>
       </div>
@@ -134,7 +192,7 @@ export default function Clients() {
   const [error, setError] = useState("");
 
   const [busqueda, setBusqueda]   = useState("");
-  const [filtro, setFiltro]       = useState<"todos" | "activo" | "en riesgo" | "inactivo">("todos");
+  const [filtro, setFiltro]       = useState<"todos" | Estado>("todos");
   const [selected, setSelected]   = useState<Client | null>(null);
 
   const [ciudad, setCiudad]             = useState("todas");
@@ -235,21 +293,35 @@ export default function Clients() {
       c.ciudad.toLowerCase().includes(busqueda.toLowerCase())
     );
 
-  const conteo = {
-    activo:    clients.filter(c => c.estado === "activo").length,
-    enRiesgo:  clients.filter(c => c.estado === "en riesgo").length,
-    inactivo:  clients.filter(c => c.estado === "inactivo").length,
+  const conteo: Record<Estado, number> = {
+    activo:      clients.filter(c => c.estado === "activo").length,
+    ocasional:   clients.filter(c => c.estado === "ocasional").length,
+    en_riesgo:   clients.filter(c => c.estado === "en_riesgo").length,
+    sin_pedidos: clients.filter(c => c.estado === "sin_pedidos").length,
   };
+
+  const encabezado = (extra?: React.ReactNode) => (
+    <header className="page-header">
+      <div>
+        <h1>Clientes</h1>
+        <p>Historial de clientes de W&amp;T Food S.A.S</p>
+      </div>
+      {extra}
+    </header>
+  );
 
   // ───────────────────────────────────────────
   // LOADING
   // ───────────────────────────────────────────
   if (loading) {
     return (
-      <div className="app-shell" style={{ background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+      <div className="app-shell">
         <Sidebar />
-        <div style={{ flex:1, display:"flex", justifyContent:"center", alignItems:"center", fontSize:18, color:"#666" }}>
-          Cargando clientes...
+        <div className="app-main">
+          {encabezado()}
+          <main className="page-body">
+            <LoadingSpinner message="Cargando clientes..." />
+          </main>
         </div>
       </div>
     );
@@ -260,145 +332,130 @@ export default function Clients() {
   // ───────────────────────────────────────────
   if (error) {
     return (
-      <div className="app-shell" style={{ background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+      <div className="app-shell">
         <Sidebar />
-        <div style={{ flex:1, display:"flex", justifyContent:"center", alignItems:"center",
-          flexDirection:"column", gap:10 }}>
-          <h2>Error</h2>
-          <p style={{ color:"#777" }}>{error}</p>
-          <button onClick={() => window.location.reload()} style={{ background:"#534AB7", color:"#fff",
-            border:"none", borderRadius:8, padding:"10px 18px", cursor:"pointer" }}>
-            Intentar nuevamente
-          </button>
+        <div className="app-main">
+          {encabezado()}
+          <main className="page-body">
+            <ErrorMessage message={error} onRetry={() => window.location.reload()} />
+          </main>
         </div>
       </div>
     );
   }
 
+  const ORDEN: Estado[] = ["activo", "ocasional", "en_riesgo", ...(conteo.sin_pedidos > 0 ? (["sin_pedidos"] as Estado[]) : [])];
+  const resumen: { key: Estado; label: string; count: number }[] = ORDEN.map(key => ({
+    key, label: ESTADO_STYLE[key].label, count: conteo[key],
+  }));
+
   return (
-    <div className="app-shell" style={{ background:"#f5f5f7", fontFamily:"system-ui,sans-serif" }}>
+    <div className="app-shell">
       <Sidebar />
+      <style>{ESTILOS}</style>
       {selected && <ClientModal client={selected} onClose={() => setSelected(null)} />}
 
       <div className="app-main">
-        <header style={{ background:"#fff", borderBottom:"0.5px solid #e0e0e0",
-          padding:"0.875rem 1.5rem", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div>
-            <h1 style={{ margin:0, fontSize:20, fontWeight:500 }}>Clientes</h1>
-            <p style={{ margin:0, fontSize:13, color:"#888" }}>
-              Historial de clientes de W&T Food S.A.S
-            </p>
-          </div>
-          <span style={{ fontSize:13, color:"#888", background:"#f0f0f0",
-            padding:"6px 14px", borderRadius:8 }}>
+        {encabezado(
+          <span className="chip chip-info" style={{ fontSize:13, padding:"6px 12px" }}>
+            <Users size={14} aria-hidden="true" />
             {clients.length} clientes registrados
           </span>
-        </header>
+        )}
 
-        <main style={{ padding:"1.5rem", display:"flex", flexDirection:"column", gap:"1.25rem" }}>
+        <main className="page-body">
 
           {/* Resumen estados */}
-          <div className="grid-auto">
-            {[
-              { key:"activo",    label:"Activos",      count: conteo.activo,   color:"#0F6E56", bg:"#E1F5EE" },
-              { key:"en riesgo", label:"En riesgo",    count: conteo.enRiesgo, color:"#BA7517", bg:"#FAEEDA" },
-              { key:"inactivo",  label:"Inactivos",    count: conteo.inactivo, color:"#993C1D", bg:"#FAECE7" },
-            ].map(item => {
+          <section aria-label="Resumen por estado" className="cli-summary">
+            {resumen.map(item => {
               const activo = filtro === item.key;
+              const s = ESTADO_STYLE[item.key];
+              const Icono = s.icon;
               return (
-                <button key={item.key} type="button"
-                  onClick={() => setFiltro(activo ? "todos" : item.key as typeof filtro)}
+                <button key={item.key} type="button" className="kpi cli-summary-btn"
+                  onClick={() => setFiltro(activo ? "todos" : item.key)}
                   aria-pressed={activo}
-                  aria-label={`Filtrar por estado ${item.label}, ${item.count} clientes`}
-                  style={{ background:"#fff", border: activo ? `1.5px solid ${item.color}`:"0.5px solid #e0e0e0",
-                    borderRadius:12, padding:"1rem 1.25rem", cursor:"pointer",
-                    textAlign:"left", font:"inherit" }}>
-                  <p style={{ margin:"0 0 4px", fontSize:12, color:"#888" }}>{item.label}</p>
-                  <p style={{ margin:0, fontSize:26, fontWeight:500, color:item.color }}>{item.count}</p>
-                  <p style={{ margin:"4px 0 0", fontSize:12, color:"#aaa" }}>clientes</p>
+                  aria-label={`Filtrar por estado ${item.label}, ${item.count} clientes`}>
+                  <p className="kpi-label" style={{ display:"flex", alignItems:"center", gap:"var(--s-2)", color:s.color }}>
+                    <Icono size={16} aria-hidden="true" />
+                    {item.label}
+                  </p>
+                  <p className="kpi-value">{item.count}</p>
+                  <p className="kpi-note">clientes</p>
                 </button>
               );
             })}
-          </div>
+          </section>
+          <p style={{ margin: "calc(var(--s-3) * -1) 0 0", fontSize: 13, color: "var(--c-muted)" }}>
+            Se clasifican por los días desde su última compra: <strong>Activo</strong>, hasta 30 días;
+            {" "}<strong>Ocasional</strong>, de 31 a 90; <strong>En riesgo</strong>, más de 90. Son las mismas
+            categorías de Promociones, el mapa y el cubo OLAP.
+          </p>
 
           {/* Búsqueda y filtros */}
-          <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
-            <input type="text" placeholder="Buscar por nombre o ciudad..."
-              value={busqueda} onChange={e => setBusqueda(e.target.value)}
-              style={{ flex:1, minWidth:220, border:"0.5px solid #e0e0e0", borderRadius:8,
-                padding:"8px 12px", fontSize:14, outline:"none",
-                background:"#fff", boxSizing:"border-box" as const }} />
-            {(["todos","activo","en riesgo","inactivo"] as const).map(f => (
-              <button key={f} onClick={() => setFiltro(f)}
-                style={{ background: filtro === f ? "#534AB7":"#fff",
-                  color: filtro === f ? "#fff":"#555",
-                  border: filtro === f ? "none":"0.5px solid #e0e0e0",
-                  borderRadius:8, padding:"8px 16px", cursor:"pointer", fontSize:13 }}>
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-          </div>
-
-          {/* Filtros avanzados */}
-          <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12,
-            padding:"1rem 1.25rem", display:"flex", gap:16, alignItems:"flex-end", flexWrap:"wrap" }}>
-
-            <div style={{ display:"flex", flexDirection:"column", gap:6, minWidth:170 }}>
-              <label style={{ fontSize:12, color:"#888", fontWeight:500 }}>Ciudad</label>
-              <select value={ciudad} onChange={e => setCiudad(e.target.value)}
-                style={{ border:"0.5px solid #e0e0e0", borderRadius:8, padding:"8px 10px",
-                  fontSize:13, outline:"none", background:"#fff", boxSizing:"border-box" as const }}>
-                <option value="todas">Todas las ciudades</option>
-                {CIUDADES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+          <section aria-label="Búsqueda y filtros" className="card" style={{ display:"flex", flexDirection:"column", gap:"var(--s-4)", padding:"var(--s-4) var(--s-5)" }}>
+            <div style={{ display:"flex", gap:"var(--s-3)", alignItems:"center", flexWrap:"wrap" }}>
+              <div className="cli-search">
+                <Search size={18} aria-hidden="true" />
+                <input type="search" className="input" placeholder="Buscar por nombre o ciudad..."
+                  aria-label="Buscar por nombre o ciudad"
+                  value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+              </div>
+              <div className="cli-seg" role="group" aria-label="Filtrar por estado">
+                {(["todos", ...ORDEN] as const).map(f => (
+                  <button key={f} type="button" className="btn" aria-pressed={filtro === f}
+                    onClick={() => setFiltro(f)}>
+                    {f === "todos" ? "Todos" : ESTADO_STYLE[f].label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              <label style={{ fontSize:12, color:"#888", fontWeight:500 }}>Última compra desde</label>
-              <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
-                style={{ border:"0.5px solid #e0e0e0", borderRadius:8, padding:"8px 10px",
-                  fontSize:13, outline:"none", boxSizing:"border-box" as const }} />
-            </div>
+            <div className="cli-filters">
+              <div>
+                <label className="field-label" htmlFor="cli-ciudad">Ciudad</label>
+                <select id="cli-ciudad" className="input" value={ciudad} onChange={e => setCiudad(e.target.value)}>
+                  <option value="todas">Todas las ciudades</option>
+                  {CIUDADES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
 
-            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              <label style={{ fontSize:12, color:"#888", fontWeight:500 }}>Hasta</label>
-              <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
-                style={{ border:"0.5px solid #e0e0e0", borderRadius:8, padding:"8px 10px",
-                  fontSize:13, outline:"none", boxSizing:"border-box" as const }} />
-            </div>
+              <div>
+                <label className="field-label" htmlFor="cli-desde">Última compra desde</label>
+                <input id="cli-desde" type="date" className="input" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
+              </div>
 
-            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              <label style={{ fontSize:12, color:"#888", fontWeight:500 }}>Intervalo mín. (días)</label>
-              <input type="number" min={0} placeholder="0" value={intervaloMin}
-                onChange={e => setIntervaloMin(e.target.value)}
-                style={{ width:90, border:"0.5px solid #e0e0e0", borderRadius:8, padding:"8px 10px",
-                  fontSize:13, outline:"none", boxSizing:"border-box" as const }} />
-            </div>
+              <div>
+                <label className="field-label" htmlFor="cli-hasta">Hasta</label>
+                <input id="cli-hasta" type="date" className="input" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
+              </div>
 
-            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              <label style={{ fontSize:12, color:"#888", fontWeight:500 }}>Intervalo máx. (días)</label>
-              <input type="number" min={0} placeholder="90" value={intervaloMax}
-                onChange={e => setIntervaloMax(e.target.value)}
-                style={{ width:90, border:"0.5px solid #e0e0e0", borderRadius:8, padding:"8px 10px",
-                  fontSize:13, outline:"none", boxSizing:"border-box" as const }} />
-            </div>
+              <div>
+                <label className="field-label" htmlFor="cli-int-min">Intervalo mín. (días)</label>
+                <input id="cli-int-min" type="number" min={0} placeholder="0" className="input" value={intervaloMin}
+                  onChange={e => setIntervaloMin(e.target.value)} />
+              </div>
 
-            <button onClick={limpiarFiltros} disabled={!hayFiltrosActivos}
-              style={{ marginLeft:"auto",
-                background: hayFiltrosActivos ? "#fff" : "#f5f5f7",
-                color: hayFiltrosActivos ? "#534AB7" : "#bbb",
-                border: hayFiltrosActivos ? "0.5px solid #534AB7" : "0.5px solid #e0e0e0",
-                borderRadius:8, padding:"8px 16px", fontSize:13,
-                cursor: hayFiltrosActivos ? "pointer" : "not-allowed" }}>
-              Limpiar filtros
-            </button>
-          </div>
+              <div>
+                <label className="field-label" htmlFor="cli-int-max">Intervalo máx. (días)</label>
+                <input id="cli-int-max" type="number" min={0} placeholder="90" className="input" value={intervaloMax}
+                  onChange={e => setIntervaloMax(e.target.value)} />
+              </div>
+
+              <div>
+                <button type="button" className="btn btn-outline" onClick={limpiarFiltros} disabled={!hayFiltrosActivos}
+                  style={{ width:"100%" }}>
+                  Limpiar filtros
+                </button>
+              </div>
+            </div>
+          </section>
 
           {/* Tabla */}
           {clients.length === 0 ? (
-            <div style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12 }}>
+            <div className="card" style={{ padding:0 }}>
               <EmptyState
-                icon="👥"
+                icon={<Users size={24} />}
                 title="Todavía no hay clientes registrados"
                 description="Los clientes aparecen aquí automáticamente cuando cargas un archivo de ventas en Excel."
                 actionLabel="Ir a Cargar Excel"
@@ -406,70 +463,62 @@ export default function Clients() {
               />
             </div>
           ) : (
-          <div className="table-scroll" style={{ background:"#fff", border:"0.5px solid #e0e0e0", borderRadius:12 }}>
-            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, minWidth:720 }}>
-              <thead>
-                <tr style={{ background:"#f9f9f9", borderBottom:"0.5px solid #e0e0e0" }}>
-                  {["Cliente","Ciudad","Pedidos","Monto total","Última compra","Intervalo","Estado",""].map(h => (
-                    <th key={h} style={{ padding:"10px 16px", textAlign:"left",
-                      fontWeight:500, color:"#666", whiteSpace:"nowrap" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {datos.length === 0 ? (
-                  <tr><td colSpan={8}>
-                    <EmptyState
-                      icon="🔍"
-                      title="Sin resultados con estos filtros"
-                      description="Ningún cliente coincide con la búsqueda o los filtros aplicados."
-                      actionLabel={hayFiltrosActivos ? "Limpiar filtros" : undefined}
-                      onAction={hayFiltrosActivos ? limpiarFiltros : undefined}
-                    />
-                  </td></tr>
-                ) : datos.map((c, i) => {
-                  const s = ESTADO_STYLE[c.estado];
-                  return (
-                    <tr key={c.id} style={{ borderBottom:"0.5px solid #f0f0f0",
-                      background: i % 2 === 0 ? "#fff":"#fafafa" }}>
-                      <td style={{ padding:"12px 16px" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                          <div aria-hidden="true" style={{ width:32, height:32, borderRadius:"50%", background:"#EEEDFE",
-                            display:"flex", alignItems:"center", justifyContent:"center",
-                            fontSize:12, fontWeight:500, color:"#534AB7", flexShrink:0 }}>
-                            {c.nombre.charAt(0)}
-                          </div>
-                          <span style={{ fontWeight:500 }}>{c.nombre}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding:"12px 16px", color:"#555" }}>{c.ciudad}</td>
-                      <td style={{ padding:"12px 16px", color:"#555", textAlign:"center" }}>{c.totalPedidos}</td>
-                      <td style={{ padding:"12px 16px", fontWeight:500, color:"#0F6E56" }}>{formatoMoneda(c.montoTotal)}</td>
-                      <td style={{ padding:"12px 16px", color:"#555" }}>{c.ultimaCompra}</td>
-                      <td style={{ padding:"12px 16px", color:"#555" }}>{c.intervalo != null ? `${c.intervalo} días` : "—"}</td>
-                      <td style={{ padding:"12px 16px" }}>
-                        <span style={{ fontSize:12, color:s.color, background:s.bg,
-                          padding:"3px 10px", borderRadius:6, fontWeight:500 }}>
-                          {c.estado.charAt(0).toUpperCase() + c.estado.slice(1)}
-                        </span>
-                      </td>
-                      <td style={{ padding:"12px 16px" }}>
-                        <button onClick={() => setSelected(c)}
-                          style={{ background:"transparent", border:"0.5px solid #e0e0e0",
-                            borderRadius:6, padding:"4px 12px", cursor:"pointer",
-                            fontSize:12, color:"#534AB7" }}>
-                          Ver detalle
-                        </button>
-                      </td>
+            <div className="card" style={{ padding:0, overflow:"hidden" }}>
+              <div className="table-scroll">
+                <table className="table" style={{ minWidth:820 }}>
+                  <caption style={SR_ONLY}>Listado de clientes</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Cliente</th>
+                      <th scope="col">Ciudad</th>
+                      <th scope="col" className="num">Pedidos</th>
+                      <th scope="col" className="num">Monto total</th>
+                      <th scope="col">Última compra</th>
+                      <th scope="col" className="num">Intervalo</th>
+                      <th scope="col">Estado</th>
+                      <th scope="col"><span style={SR_ONLY}>Acciones</span></th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {datos.length === 0 ? (
+                      <tr><td colSpan={8} style={{ padding:0 }}>
+                        <EmptyState
+                          icon={<Search size={24} />}
+                          title="Sin resultados con estos filtros"
+                          description="Ningún cliente coincide con la búsqueda o los filtros aplicados."
+                          actionLabel={hayFiltrosActivos ? "Limpiar filtros" : undefined}
+                          onAction={hayFiltrosActivos ? limpiarFiltros : undefined}
+                        />
+                      </td></tr>
+                    ) : datos.map((c) => (
+                      <tr key={c.id}>
+                        <td>
+                          <div style={{ display:"flex", alignItems:"center", gap:"var(--s-3)" }}>
+                            <div aria-hidden="true" className="cli-avatar">{c.nombre.charAt(0)}</div>
+                            <span style={{ fontWeight:600, color:"var(--c-ink)" }}>{c.nombre}</span>
+                          </div>
+                        </td>
+                        <td>{c.ciudad}</td>
+                        <td className="num">{c.totalPedidos}</td>
+                        <td className="num" style={{ fontWeight:600, color:"var(--c-ink)" }}>{formatoMoneda(c.montoTotal)}</td>
+                        <td style={{ whiteSpace:"nowrap" }}>{c.ultimaCompra}</td>
+                        <td className="num" style={{ whiteSpace:"nowrap" }}>{c.intervalo != null ? `${c.intervalo} días` : "—"}</td>
+                        <td><EstadoChip estado={c.estado} /></td>
+                        <td>
+                          <button type="button" className="btn btn-outline cli-row-btn" onClick={() => setSelected(c)}
+                            aria-label={`Ver detalle de ${c.nombre}`}>
+                            Ver detalle
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
 
-          <p style={{ margin:0, fontSize:12, color:"#aaa" }}>
+          <p role="status" style={{ margin:0, fontSize:13, color:"var(--c-muted)" }}>
             Mostrando {datos.length} de {clients.length} clientes
           </p>
         </main>

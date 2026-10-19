@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ArrowRight, Info, MessageCircle, Send, X } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 // Asistente de ayuda de FlowInsight. No es un modelo de lenguaje: responde con una base de
@@ -246,44 +247,50 @@ export default function Asistente() {
         onClick={() => setAbierto((a) => !a)}
         aria-expanded={abierto}
         aria-label={abierto ? "Cerrar el asistente" : "Abrir el asistente de ayuda"}
-        style={{ position: "fixed", right: 20, bottom: 20, zIndex: 1000, width: 54, height: 54, borderRadius: 27,
-          border: "none", background: "#534AB7", color: "#fff", fontSize: 24, cursor: "pointer",
-          boxShadow: "0 6px 18px rgba(83,74,183,0.45)" }}
+        style={{ position: "fixed", right: 16, bottom: 16, zIndex: 90, width: 56, height: 56, borderRadius: "50%",
+          border: "none", background: "var(--c-primary)", color: "#fff", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "var(--shadow-2)" }}
       >
-        {abierto ? "✕" : "💬"}
+        {abierto ? <X size={24} aria-hidden="true" /> : <MessageCircle size={24} aria-hidden="true" />}
       </button>
 
       {abierto && (
         <section
           role="dialog"
           aria-label="Asistente de ayuda"
-          style={{ position: "fixed", right: 20, bottom: 86, zIndex: 1000, width: "min(380px, calc(100vw - 40px))",
-            height: "min(520px, calc(100vh - 120px))", background: "#fff", borderRadius: 14,
-            border: "0.5px solid #d8d8e4", boxShadow: "0 12px 36px rgba(0,0,0,0.22)", display: "flex",
-            flexDirection: "column", overflow: "hidden", fontFamily: "system-ui,sans-serif" }}
+          onKeyDown={(e) => { if (e.key === "Escape") setAbierto(false); }}
+          style={{ position: "fixed", right: 16, bottom: 88, zIndex: 90, width: "min(380px, calc(100vw - 32px))",
+            height: "min(520px, calc(100vh - 112px))", background: "var(--c-surface)", borderRadius: "var(--r-lg)",
+            border: "1px solid var(--c-line-strong)", boxShadow: "var(--shadow-2)", display: "flex",
+            flexDirection: "column", overflow: "hidden", fontFamily: "var(--font)" }}
         >
-          <header style={{ background: "#534AB7", color: "#fff", padding: "12px 16px" }}>
-            <strong style={{ fontSize: 15 }}>Asistente FlowInsight</strong>
-            <div style={{ fontSize: 12, opacity: 0.85 }}>Te explica cómo usar la aplicación</div>
+          <header style={{ background: "var(--c-primary)", color: "#fff", padding: "var(--s-3) var(--s-4)" }}>
+            <strong style={{ fontSize: 16 }}>Asistente FlowInsight</strong>
+            <div style={{ fontSize: 13, color: "var(--c-primary-soft)", display: "flex", alignItems: "center", gap: "var(--s-1)" }}>
+              <Info size={14} aria-hidden="true" style={{ flexShrink: 0 }} />
+              No es una IA: responde con la guía de la aplicación
+            </div>
           </header>
 
-          <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 8,
-            background: "#F7F7FB" }} aria-live="polite">
+          <div style={{ flex: 1, overflowY: "auto", padding: "var(--s-3)", display: "flex", flexDirection: "column", gap: "var(--s-2)",
+            background: "var(--c-bg)" }} aria-live="polite">
             {mensajes.map((m, i) => (
               <div key={i} style={{ alignSelf: m.de === "yo" ? "flex-end" : "flex-start", maxWidth: "88%" }}>
-                <div style={{ background: m.de === "yo" ? "#534AB7" : "#fff", color: m.de === "yo" ? "#fff" : "#1B2430",
-                  border: m.de === "yo" ? "none" : "0.5px solid #e2e2ec", borderRadius: 12, padding: "9px 12px",
-                  fontSize: 13, lineHeight: 1.5 }}>
+                <div style={{ background: m.de === "yo" ? "var(--c-primary)" : "var(--c-surface)",
+                  color: m.de === "yo" ? "#fff" : "var(--c-ink)",
+                  border: m.de === "yo" ? "1px solid var(--c-primary)" : "1px solid var(--c-line)",
+                  borderRadius: "var(--r-md)", padding: "var(--s-2) var(--s-3)", fontSize: 14, lineHeight: 1.5 }}>
                   {m.texto}
                 </div>
                 {m.ir && (
                   <button
                     type="button"
+                    className="btn btn-outline btn-sm"
                     onClick={() => { navigate(m.ir!.ruta); setAbierto(false); }}
-                    style={{ marginTop: 6, background: "#fff", color: "#534AB7", border: "1px solid #534AB7",
-                      borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                    style={{ marginTop: "var(--s-2)", minHeight: 40 }}
                   >
                     {m.ir.etiqueta}
+                    <ArrowRight size={14} aria-hidden="true" />
                   </button>
                 )}
               </div>
@@ -291,30 +298,32 @@ export default function Asistente() {
             <div ref={finRef} />
           </div>
 
-          <div style={{ padding: "8px 12px 0", display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <div style={{ padding: "var(--s-2) var(--s-3) 0", display: "flex", gap: "var(--s-2)", overflowX: "auto" }}>
             {sugeridas.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => responder(t.titulo, t)}
-                style={{ background: "#EFEDFA", color: "#3C3489", border: "none", borderRadius: 999, padding: "4px 10px",
-                  fontSize: 11, cursor: "pointer" }}
+                style={{ flexShrink: 0, minHeight: 40, background: "var(--c-primary-soft)", color: "var(--c-primary-hover)",
+                  border: "1px solid var(--c-primary-line)", borderRadius: 999, padding: "0 var(--s-3)",
+                  fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
               >
                 {t.titulo}
               </button>
             ))}
           </div>
 
-          <form onSubmit={enviar} style={{ display: "flex", gap: 8, padding: 12 }}>
+          <form onSubmit={enviar} style={{ display: "flex", gap: "var(--s-2)", padding: "var(--s-3)" }}>
             <input
+              className="input"
               value={entrada}
               onChange={(e) => setEntrada(e.target.value)}
               placeholder="Escribe tu duda..."
               aria-label="Escribe tu duda"
-              style={{ flex: 1, border: "0.5px solid #cfcfdc", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}
+              style={{ flex: 1, minWidth: 0 }}
             />
-            <button type="submit" style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 8,
-              padding: "0 14px", fontSize: 13, cursor: "pointer" }}>
+            <button type="submit" className="btn btn-primary" style={{ flexShrink: 0 }}>
+              <Send size={16} aria-hidden="true" />
               Enviar
             </button>
           </form>

@@ -1,3 +1,5 @@
+import { TriangleAlert, RotateCw } from "lucide-react";
+
 interface ErrorMessageProps {
   message: string;
   onRetry?: () => void;
@@ -6,15 +8,15 @@ interface ErrorMessageProps {
 export default function ErrorMessage({ message, onRetry }: ErrorMessageProps) {
   return (
     <div role="alert" aria-live="assertive" style={{ display:"flex", flexDirection:"column", alignItems:"center",
-      justifyContent:"center", gap:14, background:"#FAECE7",
-      border:"0.5px solid #E24B4A", borderRadius:12, padding:"2rem", textAlign:"center" }}>
-      <span aria-hidden="true" style={{ fontSize:28 }}>⚠️</span>
-      <p style={{ margin:0, fontSize:14, color:"#993C1D", fontWeight:500, maxWidth:360 }}>
+      justifyContent:"center", gap:"var(--s-3)", background:"var(--c-bad-soft)",
+      border:"1px solid var(--c-bad)", borderRadius:"var(--r-md)", padding:"var(--s-5)", textAlign:"center" }}>
+      <TriangleAlert size={28} color="var(--c-bad)" aria-hidden="true" />
+      <p style={{ margin:0, fontSize:14, color:"var(--c-bad)", fontWeight:600, maxWidth:400 }}>
         {message}
       </p>
       {onRetry && (
-        <button onClick={onRetry} style={{ background:"#534AB7", color:"#fff",
-          border:"none", borderRadius:8, padding:"8px 18px", cursor:"pointer", fontSize:14 }}>
+        <button type="button" className="btn btn-primary" onClick={onRetry}>
+          <RotateCw size={16} aria-hidden="true" />
           Reintentar
         </button>
       )}

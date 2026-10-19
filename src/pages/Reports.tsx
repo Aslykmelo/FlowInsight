@@ -1,8 +1,11 @@
 import { API_URL } from "../config";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import {
+  AlertCircle, CheckCircle2, Clock, Download, FileSpreadsheet, FileText, Info, Loader2,
+  Plus, Trash2, type LucideIcon,
+} from "lucide-react";
 import Sidebar from "../components/Sidebar";
-import EmptyState from "../components/EmptyState";
 
 // ─── Types ────────────────────────────────────────────
 type Formato = "xlsx" | "pdf";
@@ -35,16 +38,18 @@ interface DropdownState {
   rect: DOMRect;
 }
 
+type ToastKind = "info" | "ok" | "error";
 
-const ESTADO_STYLE: Record<Report["estado"], { color: string; bg: string; label: string }> = {
-  listo:     { color: "#0F6E56", bg: "#E1F5EE", label: "Listo"     },
-  generando: { color: "#BA7517", bg: "#FAEEDA", label: "Generando" },
-  error:     { color: "#993C1D", bg: "#FAECE7", label: "Error"     },
+// El estado se comunica con texto + ícono + color (nunca solo color)
+const ESTADO_STYLE: Record<Report["estado"], { chip: string; label: string; Icon: LucideIcon }> = {
+  listo:     { chip: "chip chip-ok",   label: "Listo",     Icon: CheckCircle2 },
+  generando: { chip: "chip chip-warn", label: "Generando", Icon: Clock        },
+  error:     { chip: "chip chip-bad",  label: "Error",     Icon: AlertCircle  },
 };
 
-const FORMATO_STYLE: Record<Formato, { color: string; bg: string; label: string }> = {
-  xlsx: { color: "#0F6E56", bg: "#E1F5EE", label: "Excel" },
-  pdf:  { color: "#993C1D", bg: "#FAECE7", label: "PDF"   },
+const FORMATO_STYLE: Record<Formato, { label: string; Icon: LucideIcon }> = {
+  xlsx: { label: "Excel", Icon: FileSpreadsheet },
+  pdf:  { label: "PDF",   Icon: FileText        },
 };
 
 const TIPOS: TipoReporte[] = [
@@ -61,7 +66,47 @@ const TIPO_LABEL: Record<string, string> = Object.fromEntries(
 const formatoValido = (formato: string | null): Formato =>
   formato === "pdf" ? "pdf" : "xlsx";
 
-// ─── Selector de tipo + formato de reporte (dropdown vía portal) ─
+// Estilos propios de esta pantalla (el resto sale de design.css)
+const PAGE_CSS = `
+  @keyframes rp-spin { to { transform: rotate(360deg); } }
+  @keyframes rp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+  @keyframes rp-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .rp-spin { animation: rp-spin 0.8s linear infinite; }
+  .rp-card { padding: 0; overflow: hidden; }
+  .rp-table { min-width: 720px; }
+  .rp-name { font-weight: 600; color: var(--c-ink); }
+  .rp-actions { display: flex; gap: var(--s-2); justify-content: flex-end; }
+  .rp-empty { display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
+    padding: var(--s-6) var(--s-5); text-align: center; }
+  .rp-empty-icon { width: 48px; height: 48px; border-radius: var(--r-md); background: var(--c-primary-soft);
+    color: var(--c-primary); display: flex; align-items: center; justify-content: center; margin-bottom: var(--s-2); }
+  .rp-empty h2 { margin: 0; font-size: 16px; }
+  .rp-empty p { margin: 0; max-width: 360px; font-size: 14px; color: var(--c-muted); }
+  .rp-empty .btn { margin-top: var(--s-3); }
+  .rp-skel-row { display: flex; gap: var(--s-4); padding: var(--s-4) var(--s-5); border-bottom: 1px solid var(--c-line); }
+  .rp-skel { height: 16px; border-radius: 4px; background: var(--c-line); animation: rp-pulse 1.4s ease-in-out infinite; }
+  .rp-error { display: flex; align-items: flex-start; gap: var(--s-3); flex-wrap: wrap; }
+  .rp-error p { margin: 0; flex: 1 1 240px; }
+  .rp-foot { margin: 0; font-size: 13px; color: var(--c-muted); }
+  .rp-menu { position: fixed; background: var(--c-surface); border: 1px solid var(--c-line);
+    border-radius: var(--r-md); box-shadow: var(--shadow-2); overflow: hidden; z-index: 1000; }
+  .rp-menu-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+    padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-line); }
+  .rp-menu-row:last-child { border-bottom: none; }
+  .rp-menu-label { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: var(--c-ink); }
+  .rp-menu-btns { display: flex; gap: var(--s-2); flex-shrink: 0; }
+  .rp-menu-btns .btn { min-width: 64px; padding: 0 var(--s-3); }
+  .rp-toast { position: fixed; bottom: var(--s-5); right: 88px; max-width: calc(100vw - 32px);
+    display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4);
+    border-radius: var(--r-md); border: 1px solid; box-shadow: var(--shadow-2); z-index: 1100;
+    font-size: 14px; font-weight: 600; animation: rp-toast-in 0.2s ease-out; }
+  .rp-toast-info  { background: var(--c-info-soft); border-color: var(--c-info); color: var(--c-info); }
+  .rp-toast-ok    { background: var(--c-ok-soft);   border-color: var(--c-ok);   color: var(--c-ok); }
+  .rp-toast-error { background: var(--c-bad-soft);  border-color: var(--c-bad);  color: var(--c-bad); }
+  @media (max-width: 600px) { .rp-toast { left: var(--s-4); right: var(--s-4); bottom: 88px; } }
+`;
+
+// ─── Selector de tipo + formato de reporte (menú vía portal) ─
 function TipoDropdown({
   rect,
   onSelect,
@@ -69,52 +114,41 @@ function TipoDropdown({
   rect: DOMRect;
   onSelect: (tipo: TipoReporte, formato: Formato) => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const ancho = Math.min(340, window.innerWidth - 16);
+  const izquierda = Math.max(8, Math.min(rect.right - ancho, window.innerWidth - ancho - 8));
+
+  // Lleva el foco al primer botón al abrir, para poder usar el teclado
+  useEffect(() => {
+    ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
+  }, []);
+
   return createPortal(
     <div
+      ref={ref}
       data-format-dropdown
-      role="menu"
+      role="group"
       aria-label="Tipos de reporte"
-      style={{
-        position: "fixed",
-        top: rect.bottom + 6,
-        left: Math.max(8, rect.right - 280),
-        width: 280,
-        background: "#fff",
-        border: "0.5px solid #e0e0e0",
-        borderRadius: 8,
-        boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-        overflow: "hidden",
-        zIndex: 1000,
-      }}
+      className="rp-menu"
+      style={{ top: rect.bottom + 6, left: izquierda, width: ancho }}
     >
-      {TIPOS.map((t, idx) => (
-        <div
-          key={t.value}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "9px 14px", gap: 10,
-            borderBottom: idx < TIPOS.length - 1 ? "0.5px solid #f0f0f0" : "none",
-          }}
-        >
-          <span style={{ fontSize: 13, color: "#333" }}>{t.label}</span>
-          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+      {TIPOS.map((t) => (
+        <div key={t.value} className="rp-menu-row">
+          <span className="rp-menu-label">{t.label}</span>
+          <div className="rp-menu-btns">
             <button
-              role="menuitem"
+              type="button"
+              className="btn"
               onClick={() => onSelect(t, "xlsx")}
               aria-label={`Generar ${t.label} en Excel`}
-              style={{ background: "#E1F5EE", color: "#0F6E56", border: "none",
-                borderRadius: 6, padding: "4px 10px", cursor: "pointer",
-                fontSize: 11, fontWeight: 500 }}
             >
               Excel
             </button>
             <button
-              role="menuitem"
+              type="button"
+              className="btn"
               onClick={() => onSelect(t, "pdf")}
               aria-label={`Generar ${t.label} en PDF`}
-              style={{ background: "#FAECE7", color: "#993C1D", border: "none",
-                borderRadius: 6, padding: "4px 10px", cursor: "pointer",
-                fontSize: 11, fontWeight: 500 }}
             >
               PDF
             </button>
@@ -126,36 +160,17 @@ function TipoDropdown({
   );
 }
 
-// ─── Toast de confirmación ────────────────────────────
-function Toast({ message }: { message: string }) {
+// ─── Aviso temporal ───────────────────────────────────
+function Toast({ message, kind }: { message: string; kind: ToastKind }) {
+  const Icon = kind === "ok" ? CheckCircle2 : kind === "error" ? AlertCircle : Info;
   return (
     <div
-      role="status"
-      aria-live="polite"
-      style={{
-        position: "fixed",
-        bottom: 24,
-        right: 24,
-        background: "#E1F5EE",
-        border: "0.5px solid #0F6E56",
-        borderRadius: 12,
-        padding: "12px 18px",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-        zIndex: 1100,
-        animation: "flowinsight-toast-in 0.2s ease-out",
-      }}
+      role={kind === "error" ? "alert" : "status"}
+      aria-live={kind === "error" ? "assertive" : "polite"}
+      className={`rp-toast rp-toast-${kind}`}
     >
-      <style>{`
-        @keyframes flowinsight-toast-in {
-          from { opacity: 0; transform: translateY(8px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
-      <span aria-hidden="true" style={{ fontSize: 16 }}>⬇️</span>
-      <span style={{ fontSize: 13, color: "#0F6E56", fontWeight: 500 }}>{message}</span>
+      <Icon size={20} aria-hidden="true" style={{ flexShrink: 0 }} />
+      <span>{message}</span>
     </div>
   );
 }
@@ -175,7 +190,7 @@ export default function Reports() {
   const [generando, setGenerando] = useState(false);
 
   const [openDropdown, setOpenDropdown] = useState<DropdownState | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; kind: ToastKind } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const headerButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -226,7 +241,7 @@ export default function Reports() {
     cargarReportes();
   }, []);
 
-  // Cerrar el dropdown al hacer click fuera, o con Escape desde el teclado
+  // Cerrar el menú al hacer click fuera, o con Escape desde el teclado
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       const target = e.target as HTMLElement;
@@ -235,7 +250,12 @@ export default function Reports() {
       }
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpenDropdown(null);
+      if (e.key === "Escape") {
+        setOpenDropdown((abierto) => {
+          if (abierto) headerButtonRef.current?.focus();
+          return null;
+        });
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("keydown", handleKeyDown);
@@ -251,10 +271,10 @@ export default function Reports() {
     };
   }, []);
 
-  const mostrarToast = (mensaje: string) => {
+  const mostrarToast = (mensaje: string, kind: ToastKind = "info") => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast(mensaje);
-    toastTimer.current = setTimeout(() => setToast(null), 3000);
+    setToast({ message: mensaje, kind });
+    toastTimer.current = setTimeout(() => setToast(null), 4000);
   };
 
   const toggleDropdown = (id: number | "header", e: React.MouseEvent<HTMLButtonElement>) => {
@@ -265,7 +285,7 @@ export default function Reports() {
     setOpenDropdown({ id, rect: e.currentTarget.getBoundingClientRect() });
   };
 
-  // Permite abrir el mismo dropdown del header desde el botón del Empty State
+  // Permite abrir el mismo menú del encabezado desde el botón del estado vacío
   const abrirDropdownHeader = () => {
     const rect = headerButtonRef.current?.getBoundingClientRect();
     if (rect) setOpenDropdown({ id: "header", rect });
@@ -279,7 +299,7 @@ export default function Reports() {
 
     const token = localStorage.getItem("token");
     if (!token) {
-      mostrarToast("No hay sesión iniciada.");
+      mostrarToast("No hay sesión iniciada.", "error");
       return;
     }
 
@@ -301,12 +321,13 @@ export default function Reports() {
         throw new Error(data.detail || `Error ${response.status}`);
       }
 
-      mostrarToast(`Reporte de ${tipo.label} generado correctamente.`);
+      mostrarToast(`Reporte de ${tipo.label} generado correctamente.`, "ok");
       await cargarReportes(); // refresca la tabla con el nuevo reporte
     } catch (err) {
       console.error(err);
       mostrarToast(
-        err instanceof Error ? err.message : "No fue posible generar el reporte."
+        err instanceof Error ? err.message : "No fue posible generar el reporte.",
+        "error"
       );
     } finally {
       setGenerando(false);
@@ -319,7 +340,7 @@ export default function Reports() {
   const descargarReporte = async (report: Report) => {
     const token = localStorage.getItem("token");
     if (!token) {
-      mostrarToast("No hay sesión iniciada.");
+      mostrarToast("No hay sesión iniciada.", "error");
       return;
     }
 
@@ -345,10 +366,10 @@ export default function Reports() {
       a.remove();
       window.URL.revokeObjectURL(url);
 
-      mostrarToast(`Descargando ${report.nombre}...`);
+      mostrarToast(`Descargando ${report.nombre}...`, "ok");
     } catch (err) {
       console.error(err);
-      mostrarToast("No fue posible descargar el reporte.");
+      mostrarToast("No fue posible descargar el reporte.", "error");
     }
   };
 
@@ -361,7 +382,7 @@ export default function Reports() {
 
     const token = localStorage.getItem("token");
     if (!token) {
-      mostrarToast("No hay sesión iniciada.");
+      mostrarToast("No hay sesión iniciada.", "error");
       return;
     }
 
@@ -375,152 +396,153 @@ export default function Reports() {
         throw new Error(`Error al eliminar: ${response.status}`);
       }
 
-      mostrarToast(`"${report.nombre}" fue eliminado.`);
+      mostrarToast(`"${report.nombre}" fue eliminado.`, "ok");
       await cargarReportes(); // refresca la tabla
     } catch (err) {
       console.error(err);
-      mostrarToast("No fue posible eliminar el reporte.");
+      mostrarToast("No fue posible eliminar el reporte.", "error");
     }
   };
 
-  // ───────────────────────────────────────────
-  // LOADING
-  // ───────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="app-shell" style={{ background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
-        <Sidebar />
-        <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", fontSize: 18, color: "#666" }}>
-          Cargando reportes...
-        </div>
-      </div>
-    );
-  }
-
-  // ───────────────────────────────────────────
-  // ERROR
-  // ───────────────────────────────────────────
-  if (error) {
-    return (
-      <div className="app-shell" style={{ background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
-        <Sidebar />
-        <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center",
-          flexDirection: "column", gap: 10 }}>
-          <h2>Error</h2>
-          <p style={{ color: "#777" }}>{error}</p>
-          <button onClick={() => window.location.reload()} style={{ background: "#534AB7", color: "#fff",
-            border: "none", borderRadius: 8, padding: "10px 18px", cursor: "pointer" }}>
-            Intentar nuevamente
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="app-shell" style={{ background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
+    <div className="app-shell">
+      <style>{PAGE_CSS}</style>
       <Sidebar />
 
       <div className="app-main">
-        <header style={{ background: "#fff", borderBottom: "0.5px solid #e0e0e0",
-          padding: "0.875rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <header className="page-header">
           <div>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Reportes</h1>
-            <p style={{ margin: 0, fontSize: 13, color: "#888" }}>
-              Reportes generados de W&T Food S.A.S
-            </p>
+            <h1>Reportes</h1>
+            <p>Reportes generados de W&amp;T Food S.A.S</p>
           </div>
 
           <button
             ref={headerButtonRef}
+            type="button"
             data-format-trigger
+            className="btn btn-primary"
             onClick={(e) => toggleDropdown("header", e)}
-            disabled={generando}
-            style={{ background: "#534AB7", color: "#fff", border: "none",
-              borderRadius: 8, padding: "8px 18px", cursor: generando ? "default" : "pointer",
-              fontSize: 14, opacity: generando ? 0.7 : 1 }}
+            disabled={generando || loading}
+            aria-expanded={openDropdown?.id === "header"}
           >
-            {generando ? "Generando..." : "+ Generar reporte"}
+            {generando
+              ? <Loader2 size={18} className="rp-spin" aria-hidden="true" />
+              : <Plus size={18} aria-hidden="true" />}
+            {generando ? "Generando..." : "Generar reporte"}
           </button>
         </header>
 
-        <main style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-          <div className="table-scroll" style={{ background: "#fff", border: "0.5px solid #e0e0e0", borderRadius: 12 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
-              <thead>
-                <tr style={{ background: "#f9f9f9", borderBottom: "0.5px solid #e0e0e0" }}>
-                  {["Reporte", "Tipo", "Formato", "Fecha de generación", "Estado", "", ""].map((h, i) => (
-                    <th key={`${h}-${i}`} style={{ padding: "10px 16px", textAlign: "left",
-                      fontWeight: 500, color: "#666", whiteSpace: "nowrap" }}>{h}</th>
+        <main className="page-body">
+          {error ? (
+            <div role="alert" className="notice notice-bad rp-error">
+              <AlertCircle size={20} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} />
+              <p>{error}</p>
+              <button type="button" className="btn btn-danger" onClick={cargarReportes}>
+                Intentar nuevamente
+              </button>
+            </div>
+          ) : (
+            <section className="card rp-card" aria-label="Lista de reportes" aria-busy={loading}>
+              {loading ? (
+                <div role="status" aria-live="polite">
+                  <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)" }}>
+                    Cargando reportes...
+                  </span>
+                  {[0, 1, 2, 3].map((n) => (
+                    <div key={n} className="rp-skel-row" aria-hidden="true">
+                      <div className="rp-skel" style={{ flex: 3 }} />
+                      <div className="rp-skel" style={{ flex: 2 }} />
+                      <div className="rp-skel" style={{ flex: 1 }} />
+                      <div className="rp-skel" style={{ flex: 2 }} />
+                    </div>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {reports.length === 0 ? (
-                  <tr><td colSpan={7}>
-                    <EmptyState
-                      icon="📄"
-                      title="Todavía no has generado ningún reporte"
-                      description="Genera tu primer reporte de ventas, clientes o riesgo de abandono."
-                      actionLabel="Generar reporte"
-                      onAction={abrirDropdownHeader}
-                    />
-                  </td></tr>
-                ) : reports.map((r, i) => {
-                  const s = ESTADO_STYLE[r.estado];
-                  const f = FORMATO_STYLE[r.formato];
-                  return (
-                    <tr key={r.id} style={{ borderBottom: "0.5px solid #f0f0f0",
-                      background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                      <td style={{ padding: "12px 16px", fontWeight: 500 }}>{r.nombre}</td>
-                      <td style={{ padding: "12px 16px", color: "#555" }}>{r.tipo}</td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <span style={{ fontSize: 12, color: f.color, background: f.bg,
-                          padding: "3px 10px", borderRadius: 6, fontWeight: 500 }}>
-                          {f.label}
-                        </span>
-                      </td>
-                      <td style={{ padding: "12px 16px", color: "#555" }}>{r.fecha}</td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <span style={{ fontSize: 12, color: s.color, background: s.bg,
-                          padding: "3px 10px", borderRadius: 6, fontWeight: 500 }}>
-                          {s.label}
-                        </span>
-                      </td>
-                      <td style={{ padding: "12px 16px" }}>
-                        {r.estado === "listo" ? (
-                          <button
-                            onClick={() => descargarReporte(r)}
-                            style={{ background: "transparent", border: "0.5px solid #534AB7",
-                              borderRadius: 6, padding: "4px 12px", cursor: "pointer",
-                              fontSize: 12, color: "#534AB7", fontWeight: 500 }}
-                          >
-                            Descargar
-                          </button>
-                        ) : (
-                          <span style={{ fontSize: 12, color: "#bbb" }}>—</span>
-                        )}
-                      </td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <button
-                          onClick={() => eliminarReporte(r)}
-                          style={{ background: "transparent", border: "0.5px solid #E24B4A",
-                            borderRadius: 6, padding: "4px 12px", cursor: "pointer",
-                            fontSize: 12, color: "#E24B4A", fontWeight: 500 }}
-                        >
-                          Eliminar
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                </div>
+              ) : reports.length === 0 ? (
+                <div className="rp-empty">
+                  <div className="rp-empty-icon" aria-hidden="true"><FileText size={24} /></div>
+                  <h2>Todavía no has generado ningún reporte</h2>
+                  <p>Genera tu primer reporte de ventas, clientes o riesgo de abandono.</p>
+                  <button type="button" className="btn btn-outline" onClick={abrirDropdownHeader}>
+                    <Plus size={18} aria-hidden="true" />
+                    Generar reporte
+                  </button>
+                </div>
+              ) : (
+                <div className="table-scroll">
+                  <table className="table rp-table">
+                    <caption style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)" }}>
+                      Reportes generados
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Reporte</th>
+                        <th scope="col">Tipo</th>
+                        <th scope="col">Formato</th>
+                        <th scope="col">Fecha de generación</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col" className="num">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reports.map((r) => {
+                        const s = ESTADO_STYLE[r.estado];
+                        const f = FORMATO_STYLE[r.formato];
+                        return (
+                          <tr key={r.id}>
+                            <td className="rp-name">{r.nombre}</td>
+                            <td>{r.tipo}</td>
+                            <td>
+                              <span className="chip">
+                                <f.Icon size={14} aria-hidden="true" />
+                                {f.label}
+                              </span>
+                            </td>
+                            <td style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{r.fecha}</td>
+                            <td>
+                              <span className={s.chip}>
+                                <s.Icon size={14} aria-hidden="true" />
+                                {s.label}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="rp-actions">
+                                {r.estado === "listo" && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline"
+                                    onClick={() => descargarReporte(r)}
+                                    aria-label={`Descargar ${r.nombre}`}
+                                  >
+                                    <Download size={16} aria-hidden="true" />
+                                    Descargar
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="btn btn-danger"
+                                  onClick={() => eliminarReporte(r)}
+                                  aria-label={`Eliminar ${r.nombre}`}
+                                >
+                                  <Trash2 size={16} aria-hidden="true" />
+                                  Eliminar
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
 
-          <p style={{ margin: 0, fontSize: 12, color: "#aaa" }}>
-            Mostrando {reports.length} reportes
-          </p>
+          {!loading && !error && reports.length > 0 && (
+            <p className="rp-foot">
+              Mostrando {reports.length} {reports.length === 1 ? "reporte" : "reportes"}
+            </p>
+          )}
         </main>
       </div>
 
@@ -531,7 +553,7 @@ export default function Reports() {
         />
       )}
 
-      {toast && <Toast message={toast} />}
+      {toast && <Toast message={toast.message} kind={toast.kind} />}
     </div>
   );
 }

@@ -1,50 +1,39 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { Check, FileText, FileUp, LogOut, Megaphone, Sparkles, X, type LucideIcon } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
 import { updateMe, changePassword, getActividad, mensajeDeError, type ActividadUsuario } from "../api/authApi";
 
-const COLORES_AVATAR = ["#534AB7", "#0F6E56", "#2F6FED", "#BA7517", "#993C1D", "#1B2430"];
+// Colores de la paleta de marca; todos dan contraste >= 4.5:1 con la inicial en blanco.
+const COLORES_AVATAR = [
+  { valor: "#534AB7", nombre: "Morado" },
+  { valor: "#0F6E56", nombre: "Verde" },
+  { valor: "#1F5FD1", nombre: "Azul" },
+  { valor: "#8A5208", nombre: "Ámbar" },
+  { valor: "#A33A1E", nombre: "Rojo" },
+  { valor: "#1B2430", nombre: "Oscuro" },
+];
+
+// Tonos que se guardaban antes de unificar la paleta, para no perder la elección de quien ya eligió uno.
+const COLOR_ANTERIOR: Record<string, string> = { "#2F6FED": "#1F5FD1", "#BA7517": "#8A5208", "#993C1D": "#A33A1E" };
 
 const leerColor = (id: number | undefined) => {
   try {
-    return localStorage.getItem(`avatar-color-${id}`) ?? COLORES_AVATAR[0];
+    const guardado = localStorage.getItem(`avatar-color-${id}`);
+    if (!guardado) return COLORES_AVATAR[0].valor;
+    return COLOR_ANTERIOR[guardado] ?? guardado;
   } catch {
-    return COLORES_AVATAR[0];
+    return COLORES_AVATAR[0].valor;
   }
 };
 
-const ACCESOS = [
-  { etiqueta: "Generar un informe", ruta: "/reports", emoji: "📄" },
-  { etiqueta: "Ver clientes en riesgo", ruta: "/promotions", emoji: "🎯" },
-  { etiqueta: "Revisar predicciones", ruta: "/predictions", emoji: "🤖" },
-  { etiqueta: "Cargar datos de Excel", ruta: "/upload", emoji: "📁" },
+const ACCESOS: { etiqueta: string; ruta: string; icono: LucideIcon }[] = [
+  { etiqueta: "Generar un informe", ruta: "/reports", icono: FileText },
+  { etiqueta: "Ver clientes en riesgo", ruta: "/promotions", icono: Megaphone },
+  { etiqueta: "Revisar predicciones", ruta: "/predictions", icono: Sparkles },
+  { etiqueta: "Cargar datos de Excel", ruta: "/upload", icono: FileUp },
 ];
-
-const card: React.CSSProperties = {
-  background: "#fff",
-  border: "0.5px solid #e0e0e0",
-  borderRadius: 12,
-  padding: "1.25rem 1.5rem",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  border: "0.5px solid #e0e0e0",
-  borderRadius: 8,
-  padding: "10px 12px",
-  fontSize: 14,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 13,
-  fontWeight: 500,
-  color: "#555",
-  marginBottom: 6,
-};
 
 const PERMISOS: Record<string, { puede: string[]; noPuede: string[] }> = {
   Administrador: {
@@ -96,9 +85,13 @@ export default function Profile() {
 
   const [colorAvatar, setColorAvatar] = useState(() => leerColor(usuario?.id_usuario));
   const [actividad, setActividad] = useState<ActividadUsuario | null>(null);
+  const [cargandoActividad, setCargandoActividad] = useState(true);
 
   useEffect(() => {
-    getActividad().then(setActividad).catch(() => setActividad(null));
+    getActividad()
+      .then(setActividad)
+      .catch(() => setActividad(null))
+      .finally(() => setCargandoActividad(false));
   }, []);
 
   const elegirColor = (color: string) => {
@@ -158,32 +151,18 @@ export default function Profile() {
   const permisos = usuario ? PERMISOS[usuario.rol] ?? PERMISOS.Analista : PERMISOS.Analista;
 
   return (
-    <div className="app-shell" style={{ background: "#f5f5f7", fontFamily: "system-ui,sans-serif" }}>
+    <div className="app-shell">
       <Sidebar />
       <div className="app-main">
-        <header
-          style={{
-            background: "#fff",
-            borderBottom: "0.5px solid #e0e0e0",
-            padding: "0.875rem 1.5rem",
-          }}
-        >
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Mi perfil</h1>
-          <p style={{ margin: 0, fontSize: 13, color: "#888" }}>
-            Tus datos de cuenta, tu contraseña y los permisos de tu rol
-          </p>
+        <header className="page-header">
+          <div>
+            <h1>Mi perfil</h1>
+            <p>Tus datos de cuenta, tu contraseña y los permisos de tu rol</p>
+          </div>
         </header>
 
-        <main
-          style={{
-            padding: "1.5rem",
-            display: "flex",
-            flexDirection: "column",
-            gap: "1.25rem",
-            maxWidth: 760,
-          }}
-        >
-          <section style={{ ...card, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <main className="page-body" style={{ maxWidth: 880 }}>
+          <section className="card" style={{ display: "flex", alignItems: "center", gap: "var(--s-4)", flexWrap: "wrap" }}>
             <div
               aria-hidden="true"
               style={{
@@ -195,201 +174,213 @@ export default function Profile() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 20,
-                fontWeight: 500,
+                fontSize: 22,
+                fontWeight: 700,
+                flexShrink: 0,
               }}
             >
               {(usuario?.nombre_usuario ?? "?").slice(0, 1).toUpperCase()}
             </div>
             <div style={{ flex: 1, minWidth: 200 }}>
-              <p style={{ margin: 0, fontSize: 18, fontWeight: 500 }}>{usuario?.nombre_usuario}</p>
-              <p style={{ margin: "2px 0 0", fontSize: 13, color: "#777" }}>{usuario?.correo}</p>
-              <p style={{ margin: "6px 0 0", fontSize: 12, color: "#888" }}>
+              <p style={{ margin: 0, fontSize: 18, fontWeight: 700, overflowWrap: "anywhere" }}>{usuario?.nombre_usuario}</p>
+              <p style={{ margin: "2px 0 0", fontSize: 14, color: "var(--c-muted)", overflowWrap: "anywhere" }}>{usuario?.correo}</p>
+              <p style={{ margin: "var(--s-2) 0 0", fontSize: 13, color: "var(--c-muted)", fontVariantNumeric: "tabular-nums" }}>
                 Última sesión: {formatoFecha(usuario?.ultima_sesion ?? null)}
               </p>
             </div>
-            <span
-              style={{
-                fontSize: 12,
-                color: "#534AB7",
-                background: "#EEEDFE",
-                padding: "4px 12px",
-                borderRadius: 6,
-                fontWeight: 500,
-              }}
-            >
-              {usuario?.rol}
-            </span>
+            <span className="chip">{usuario?.rol}</span>
           </section>
 
-          <section style={card}>
-            <h2 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 500 }}>Personaliza tu cuenta</h2>
-            <p style={{ margin: "0 0 12px", fontSize: 12, color: "#888" }}>
+          <section className="card">
+            <h2>Personaliza tu cuenta</h2>
+            <p style={{ margin: "0 0 var(--s-3)", fontSize: 13, color: "var(--c-muted)" }}>
               El color se guarda en este navegador. El tamaño del texto se cambia con los botones A- y A+ del menú.
             </p>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }} role="radiogroup" aria-label="Color del avatar">
-              {COLORES_AVATAR.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  role="radio"
-                  aria-checked={colorAvatar === c}
-                  aria-label={`Color ${c}`}
-                  onClick={() => elegirColor(c)}
-                  style={{ width: 32, height: 32, borderRadius: "50%", background: c, cursor: "pointer",
-                    border: colorAvatar === c ? "3px solid #fff" : "3px solid transparent",
-                    outline: colorAvatar === c ? `2px solid ${c}` : "none" }}
-                />
-              ))}
+            <div style={{ display: "flex", gap: "var(--s-2)", flexWrap: "wrap" }} role="radiogroup" aria-label="Color del avatar">
+              {COLORES_AVATAR.map((c) => {
+                const elegido = colorAvatar === c.valor;
+                return (
+                  <button
+                    key={c.valor}
+                    type="button"
+                    role="radio"
+                    aria-checked={elegido}
+                    aria-label={c.nombre}
+                    title={c.nombre}
+                    onClick={() => elegirColor(c.valor)}
+                    style={{ width: 44, height: 44, borderRadius: "50%", background: "transparent", cursor: "pointer",
+                      border: elegido ? `2px solid ${c.valor}` : "2px solid transparent", padding: 3,
+                      display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <span style={{ width: "100%", height: "100%", borderRadius: "50%", background: c.valor, color: "#fff",
+                      display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {elegido && <Check size={18} strokeWidth={3} aria-hidden="true" />}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </section>
 
-          <section style={card}>
-            <h2 style={{ margin: "0 0 1rem", fontSize: 16, fontWeight: 500 }}>Mi actividad</h2>
-            {actividad ? (
+          <section className="card" aria-busy={cargandoActividad}>
+            <h2>Mi actividad</h2>
+            {cargandoActividad ? (
+              <p role="status" style={{ margin: 0, fontSize: 14, color: "var(--c-muted)" }}>Cargando tu actividad…</p>
+            ) : actividad ? (
               <>
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
-                  <div style={{ flex: "1 1 150px", background: "#F6F5FD", borderRadius: 10, padding: 12 }}>
-                    <p style={{ margin: 0, fontSize: 12, color: "#777" }}>Informes generados</p>
-                    <p style={{ margin: "2px 0 0", fontSize: 22, fontWeight: 500 }}>{actividad.reportes_generados}</p>
+                <div style={{ display: "grid", gap: "var(--s-3)", marginBottom: "var(--s-4)",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))" }}>
+                  <div className="kpi" style={{ boxShadow: "none", background: "var(--c-primary-soft)", borderColor: "var(--c-primary-line)" }}>
+                    <p className="kpi-label">Informes generados</p>
+                    <p className="kpi-value">{actividad.reportes_generados}</p>
                   </div>
-                  <div style={{ flex: "1 1 150px", background: "#F6F5FD", borderRadius: 10, padding: 12 }}>
-                    <p style={{ margin: 0, fontSize: 12, color: "#777" }}>En PDF / en Excel</p>
-                    <p style={{ margin: "2px 0 0", fontSize: 22, fontWeight: 500 }}>
+                  <div className="kpi" style={{ boxShadow: "none", background: "var(--c-primary-soft)", borderColor: "var(--c-primary-line)" }}>
+                    <p className="kpi-label">En PDF / en Excel</p>
+                    <p className="kpi-value">
                       {actividad.reportes_por_formato.pdf ?? 0} / {actividad.reportes_por_formato.xlsx ?? 0}
                     </p>
                   </div>
                 </div>
                 {actividad.reportes_recientes.length > 0 ? (
-                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "#444" }}>
+                  <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
                     {actividad.reportes_recientes.map((r) => (
-                      <li key={r.id_reporte} style={{ marginBottom: 4 }}>
-                        {r.nombre ?? "Reporte"} · {(r.formato ?? "").toUpperCase()} · {formatoFecha(r.fecha)}
+                      <li key={r.id_reporte} style={{ display: "flex", alignItems: "center", gap: "var(--s-2)", flexWrap: "wrap",
+                        padding: "var(--s-2) 0", borderBottom: "1px solid var(--c-line)", fontSize: 14, color: "var(--c-ink-2)" }}>
+                        <FileText size={16} aria-hidden="true" style={{ color: "var(--c-muted)", flexShrink: 0 }} />
+                        <span style={{ flex: "1 1 160px", overflowWrap: "anywhere" }}>{r.nombre ?? "Reporte"}</span>
+                        <span className="chip chip-info">{(r.formato ?? "").toUpperCase()}</span>
+                        <span style={{ fontSize: 13, color: "var(--c-muted)", fontVariantNumeric: "tabular-nums" }}>{formatoFecha(r.fecha)}</span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p style={{ margin: 0, fontSize: 13, color: "#888" }}>Aún no has generado informes.</p>
+                  <p style={{ margin: 0, fontSize: 14, color: "var(--c-muted)" }}>Aún no has generado informes.</p>
                 )}
               </>
             ) : (
-              <p style={{ margin: 0, fontSize: 13, color: "#888" }}>No se pudo cargar tu actividad.</p>
+              <p role="alert" className="notice notice-bad" style={{ margin: 0 }}>No se pudo cargar tu actividad.</p>
             )}
           </section>
 
-          <section style={card}>
-            <h2 style={{ margin: "0 0 1rem", fontSize: 16, fontWeight: 500 }}>Accesos rápidos</h2>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <section className="card">
+            <h2>Accesos rápidos</h2>
+            <div style={{ display: "grid", gap: "var(--s-2)", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))" }}>
               {ACCESOS.map((a) => (
-                <button
-                  key={a.ruta}
-                  type="button"
-                  onClick={() => navigate(a.ruta)}
-                  style={{ background: "#fff", border: "0.5px solid #d8d8e4", borderRadius: 10, padding: "10px 14px",
-                    fontSize: 13, cursor: "pointer", color: "#333" }}
-                >
-                  <span aria-hidden="true">{a.emoji}</span> {a.etiqueta}
+                <button key={a.ruta} type="button" className="btn" onClick={() => navigate(a.ruta)}
+                  style={{ justifyContent: "flex-start" }}>
+                  <a.icono size={18} aria-hidden="true" style={{ color: "var(--c-primary)", flexShrink: 0 }} />
+                  {a.etiqueta}
                 </button>
               ))}
             </div>
           </section>
 
-          <section style={card}>
-            <h2 style={{ margin: "0 0 1rem", fontSize: 16, fontWeight: 500 }}>Datos personales</h2>
-            <form onSubmit={guardarPerfil} noValidate>
-              <div style={{ marginBottom: 14 }}>
-                <label htmlFor="perfil-nombre" style={labelStyle}>Nombre</label>
-                <input
-                  id="perfil-nombre"
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  style={inputStyle}
-                />
-              </div>
-              <div style={{ marginBottom: 14 }}>
-                <label htmlFor="perfil-telefono" style={labelStyle}>Teléfono celular</label>
-                <input
-                  id="perfil-telefono"
-                  inputMode="tel"
-                  value={telefono}
-                  onChange={(e) => setTelefono(e.target.value)}
-                  placeholder="3001234567"
-                  aria-describedby="perfil-telefono-ayuda"
-                  style={inputStyle}
-                />
-                <p id="perfil-telefono-ayuda" style={{ margin: "6px 0 0", fontSize: 12, color: "#888" }}>
-                  A este número enviamos el código si olvidas tu contraseña. Si no registras uno, lo enviamos a tu
-                  correo ({usuario?.correo}).
-                </p>
-              </div>
-              {msgPerfil && <Mensaje {...msgPerfil} />}
-              <button type="submit" disabled={guardando} style={botonPrimario(guardando)}>
-                {guardando ? "Guardando..." : "Guardar cambios"}
-              </button>
-            </form>
-          </section>
+          <div style={{ display: "grid", gap: "var(--s-5)", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", alignItems: "start" }}>
+            <section className="card">
+              <h2>Datos personales</h2>
+              <form onSubmit={guardarPerfil} noValidate>
+                <div style={{ marginBottom: "var(--s-4)" }}>
+                  <label htmlFor="perfil-nombre" className="field-label">Nombre</label>
+                  <input
+                    id="perfil-nombre"
+                    className="input"
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                  />
+                </div>
+                <div style={{ marginBottom: "var(--s-4)" }}>
+                  <label htmlFor="perfil-telefono" className="field-label">Teléfono celular</label>
+                  <input
+                    id="perfil-telefono"
+                    className="input"
+                    inputMode="tel"
+                    value={telefono}
+                    onChange={(e) => setTelefono(e.target.value)}
+                    placeholder="3001234567"
+                    aria-describedby="perfil-telefono-ayuda"
+                  />
+                  <p id="perfil-telefono-ayuda" style={{ margin: "var(--s-2) 0 0", fontSize: 13, color: "var(--c-muted)" }}>
+                    A este número enviamos el código si olvidas tu contraseña. Si no registras uno, lo enviamos a tu
+                    correo ({usuario?.correo}).
+                  </p>
+                </div>
+                {msgPerfil && <Mensaje {...msgPerfil} />}
+                <button type="submit" disabled={guardando} className="btn btn-primary">
+                  {guardando ? "Guardando…" : "Guardar cambios"}
+                </button>
+              </form>
+            </section>
 
-          <section style={card}>
-            <h2 style={{ margin: "0 0 1rem", fontSize: 16, fontWeight: 500 }}>Cambiar contraseña</h2>
-            <form onSubmit={guardarClave} noValidate>
-              <div style={{ marginBottom: 14 }}>
-                <label htmlFor="clave-actual" style={labelStyle}>Contraseña actual</label>
-                <input
-                  id="clave-actual"
-                  type="password"
-                  autoComplete="current-password"
-                  value={actual}
-                  onChange={(e) => setActual(e.target.value)}
-                  style={inputStyle}
-                />
-              </div>
-              <div style={{ marginBottom: 14 }}>
-                <label htmlFor="clave-nueva" style={labelStyle}>Nueva contraseña</label>
-                <input
-                  id="clave-nueva"
-                  type="password"
-                  autoComplete="new-password"
-                  value={nueva}
-                  onChange={(e) => setNueva(e.target.value)}
-                  style={inputStyle}
-                />
-              </div>
-              <div style={{ marginBottom: 14 }}>
-                <label htmlFor="clave-confirmar" style={labelStyle}>Confirmar nueva contraseña</label>
-                <input
-                  id="clave-confirmar"
-                  type="password"
-                  autoComplete="new-password"
-                  value={confirmar}
-                  onChange={(e) => setConfirmar(e.target.value)}
-                  style={inputStyle}
-                />
-              </div>
-              {msgClave && <Mensaje {...msgClave} />}
-              <button type="submit" disabled={cambiando} style={botonPrimario(cambiando)}>
-                {cambiando ? "Actualizando..." : "Actualizar contraseña"}
-              </button>
-            </form>
-          </section>
+            <section className="card">
+              <h2>Cambiar contraseña</h2>
+              <form onSubmit={guardarClave} noValidate>
+                <div style={{ marginBottom: "var(--s-4)" }}>
+                  <label htmlFor="clave-actual" className="field-label">Contraseña actual</label>
+                  <input
+                    id="clave-actual"
+                    className="input"
+                    type="password"
+                    autoComplete="current-password"
+                    value={actual}
+                    onChange={(e) => setActual(e.target.value)}
+                  />
+                </div>
+                <div style={{ marginBottom: "var(--s-4)" }}>
+                  <label htmlFor="clave-nueva" className="field-label">Nueva contraseña</label>
+                  <input
+                    id="clave-nueva"
+                    className="input"
+                    type="password"
+                    autoComplete="new-password"
+                    value={nueva}
+                    onChange={(e) => setNueva(e.target.value)}
+                    aria-describedby="clave-nueva-ayuda"
+                  />
+                  <p id="clave-nueva-ayuda" style={{ margin: "var(--s-2) 0 0", fontSize: 13, color: "var(--c-muted)" }}>
+                    Mínimo 8 caracteres.
+                  </p>
+                </div>
+                <div style={{ marginBottom: "var(--s-4)" }}>
+                  <label htmlFor="clave-confirmar" className="field-label">Confirmar nueva contraseña</label>
+                  <input
+                    id="clave-confirmar"
+                    className="input"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmar}
+                    onChange={(e) => setConfirmar(e.target.value)}
+                  />
+                </div>
+                {msgClave && <Mensaje {...msgClave} />}
+                <button type="submit" disabled={cambiando} className="btn btn-outline">
+                  {cambiando ? "Actualizando…" : "Actualizar contraseña"}
+                </button>
+              </form>
+            </section>
+          </div>
 
-          <section style={card}>
-            <h2 style={{ margin: "0 0 1rem", fontSize: 16, fontWeight: 500 }}>
-              Permisos de tu rol ({usuario?.rol})
-            </h2>
-            <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 500, color: "#0F6E56" }}>Puedes</p>
-            <ul style={{ margin: "0 0 12px", paddingLeft: 20, fontSize: 13, color: "#444" }}>
+          <section className="card">
+            <h2>Permisos de tu rol ({usuario?.rol})</h2>
+            <p style={{ margin: "0 0 var(--s-2)", fontSize: 14, fontWeight: 700, color: "var(--c-ok)" }}>Puedes</p>
+            <ul style={{ margin: "0 0 var(--s-4)", padding: 0, listStyle: "none" }}>
               {permisos.puede.map((p) => (
-                <li key={p} style={{ marginBottom: 4 }}>{p}</li>
+                <li key={p} style={{ display: "flex", gap: "var(--s-2)", marginBottom: "var(--s-2)", fontSize: 14, color: "var(--c-ink-2)" }}>
+                  <Check size={18} aria-hidden="true" style={{ color: "var(--c-ok)", flexShrink: 0, marginTop: 2 }} />
+                  <span>{p}</span>
+                </li>
               ))}
             </ul>
             {permisos.noPuede.length > 0 && (
               <>
-                <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 500, color: "#993C1D" }}>
+                <p style={{ margin: "0 0 var(--s-2)", fontSize: 14, fontWeight: 700, color: "var(--c-bad)" }}>
                   No puedes
                 </p>
-                <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: "#444" }}>
+                <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
                   {permisos.noPuede.map((p) => (
-                    <li key={p} style={{ marginBottom: 4 }}>{p}</li>
+                    <li key={p} style={{ display: "flex", gap: "var(--s-2)", marginBottom: "var(--s-2)", fontSize: 14, color: "var(--c-ink-2)" }}>
+                      <X size={18} aria-hidden="true" style={{ color: "var(--c-bad)", flexShrink: 0, marginTop: 2 }} />
+                      <span>{p}</span>
+                    </li>
                   ))}
                 </ul>
               </>
@@ -397,20 +388,8 @@ export default function Profile() {
           </section>
 
           <div>
-            <button
-              type="button"
-              onClick={salir}
-              style={{
-                background: "#fff",
-                color: "#993C1D",
-                border: "0.5px solid #993C1D",
-                borderRadius: 8,
-                padding: "10px 18px",
-                cursor: "pointer",
-                fontSize: 14,
-              }}
-            >
-              Cerrar sesión
+            <button type="button" onClick={salir} className="btn btn-danger">
+              <LogOut size={16} aria-hidden="true" /> Cerrar sesión
             </button>
           </div>
         </main>
@@ -424,31 +403,10 @@ function Mensaje({ tipo, texto }: { tipo: "ok" | "error"; texto: string }) {
   return (
     <div
       role={ok ? "status" : "alert"}
-      style={{
-        background: ok ? "#E1F5EE" : "#FAECE7",
-        border: `0.5px solid ${ok ? "#0F6E56" : "#E24B4A"}`,
-        color: ok ? "#0F6E56" : "#993C1D",
-        borderRadius: 8,
-        padding: "10px 14px",
-        fontSize: 13,
-        marginBottom: 14,
-      }}
+      className={`notice ${ok ? "notice-ok" : "notice-bad"}`}
+      style={{ marginBottom: "var(--s-4)" }}
     >
       {texto}
     </div>
   );
-}
-
-function botonPrimario(deshabilitado: boolean): React.CSSProperties {
-  return {
-    background: "#534AB7",
-    color: "#fff",
-    border: "none",
-    borderRadius: 8,
-    padding: "10px 18px",
-    fontSize: 14,
-    fontWeight: 500,
-    cursor: deshabilitado ? "default" : "pointer",
-    opacity: deshabilitado ? 0.7 : 1,
-  };
 }

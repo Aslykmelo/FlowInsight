@@ -286,3 +286,23 @@ def test_ficha_del_modelo_expone_metricas_y_umbrales(client_sin_transaccion, hea
 
 def test_ficha_del_modelo_requiere_autenticacion(client_sin_transaccion):
     assert client_sin_transaccion.get("/predicciones/modelo").status_code == 401
+
+
+# ----------------------------------------------------------------- actividad del perfil
+def test_actividad_requiere_sesion(client):
+    assert client.get("/auth/me/actividad").status_code == 401
+
+
+def test_actividad_cuenta_los_reportes_del_propio_usuario(client_sin_transaccion, headers_admin):
+    antes = client_sin_transaccion.get("/auth/me/actividad", headers=headers_admin).json()
+    nuevo = client_sin_transaccion.post(
+        "/reports/generate", json={"tipo": "ventas", "formato": "xlsx"}, headers=headers_admin)
+    assert nuevo.status_code == 200
+    try:
+        despues = client_sin_transaccion.get("/auth/me/actividad", headers=headers_admin).json()
+        assert despues["reportes_generados"] == antes["reportes_generados"] + 1
+        assert despues["reportes_por_formato"]["xlsx"] == antes["reportes_por_formato"].get("xlsx", 0) + 1
+        assert despues["reportes_recientes"][0]["tipo"] == "ventas"
+        assert len(despues["reportes_recientes"]) <= 5
+    finally:
+        client_sin_transaccion.delete(f"/reports/{nuevo.json()['id_reporte']}", headers=headers_admin)

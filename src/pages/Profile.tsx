@@ -1,8 +1,25 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
-import { updateMe, changePassword, mensajeDeError } from "../api/authApi";
+import { updateMe, changePassword, getActividad, mensajeDeError, type ActividadUsuario } from "../api/authApi";
+
+const COLORES_AVATAR = ["#534AB7", "#0F6E56", "#2F6FED", "#BA7517", "#993C1D", "#1B2430"];
+
+const leerColor = (id: number | undefined) => {
+  try {
+    return localStorage.getItem(`avatar-color-${id}`) ?? COLORES_AVATAR[0];
+  } catch {
+    return COLORES_AVATAR[0];
+  }
+};
+
+const ACCESOS = [
+  { etiqueta: "Generar un informe", ruta: "/reports", emoji: "📄" },
+  { etiqueta: "Ver clientes en riesgo", ruta: "/promotions", emoji: "🎯" },
+  { etiqueta: "Revisar predicciones", ruta: "/predictions", emoji: "🤖" },
+  { etiqueta: "Cargar datos de Excel", ruta: "/upload", emoji: "📁" },
+];
 
 const card: React.CSSProperties = {
   background: "#fff",
@@ -76,6 +93,22 @@ export default function Profile() {
   const [confirmar, setConfirmar] = useState("");
   const [msgClave, setMsgClave] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const [cambiando, setCambiando] = useState(false);
+
+  const [colorAvatar, setColorAvatar] = useState(() => leerColor(usuario?.id_usuario));
+  const [actividad, setActividad] = useState<ActividadUsuario | null>(null);
+
+  useEffect(() => {
+    getActividad().then(setActividad).catch(() => setActividad(null));
+  }, []);
+
+  const elegirColor = (color: string) => {
+    setColorAvatar(color);
+    try {
+      localStorage.setItem(`avatar-color-${usuario?.id_usuario}`, color);
+    } catch {
+      /* sin almacenamiento: el color vale solo para esta visita */
+    }
+  };
 
   const guardarPerfil = async (e: FormEvent) => {
     e.preventDefault();
@@ -157,7 +190,7 @@ export default function Profile() {
                 width: 56,
                 height: 56,
                 borderRadius: "50%",
-                background: "#534AB7",
+                background: colorAvatar,
                 color: "#fff",
                 display: "flex",
                 alignItems: "center",
@@ -190,6 +223,78 @@ export default function Profile() {
           </section>
 
           <section style={card}>
+            <h2 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 500 }}>Personaliza tu cuenta</h2>
+            <p style={{ margin: "0 0 12px", fontSize: 12, color: "#888" }}>
+              El color se guarda en este navegador. El tamaño del texto se cambia con los botones A- y A+ del menú.
+            </p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }} role="radiogroup" aria-label="Color del avatar">
+              {COLORES_AVATAR.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  role="radio"
+                  aria-checked={colorAvatar === c}
+                  aria-label={`Color ${c}`}
+                  onClick={() => elegirColor(c)}
+                  style={{ width: 32, height: 32, borderRadius: "50%", background: c, cursor: "pointer",
+                    border: colorAvatar === c ? "3px solid #fff" : "3px solid transparent",
+                    outline: colorAvatar === c ? `2px solid ${c}` : "none" }}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section style={card}>
+            <h2 style={{ margin: "0 0 1rem", fontSize: 16, fontWeight: 500 }}>Mi actividad</h2>
+            {actividad ? (
+              <>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+                  <div style={{ flex: "1 1 150px", background: "#F6F5FD", borderRadius: 10, padding: 12 }}>
+                    <p style={{ margin: 0, fontSize: 12, color: "#777" }}>Informes generados</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 22, fontWeight: 500 }}>{actividad.reportes_generados}</p>
+                  </div>
+                  <div style={{ flex: "1 1 150px", background: "#F6F5FD", borderRadius: 10, padding: 12 }}>
+                    <p style={{ margin: 0, fontSize: 12, color: "#777" }}>En PDF / en Excel</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 22, fontWeight: 500 }}>
+                      {actividad.reportes_por_formato.pdf ?? 0} / {actividad.reportes_por_formato.xlsx ?? 0}
+                    </p>
+                  </div>
+                </div>
+                {actividad.reportes_recientes.length > 0 ? (
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "#444" }}>
+                    {actividad.reportes_recientes.map((r) => (
+                      <li key={r.id_reporte} style={{ marginBottom: 4 }}>
+                        {r.nombre ?? "Reporte"} · {(r.formato ?? "").toUpperCase()} · {formatoFecha(r.fecha)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p style={{ margin: 0, fontSize: 13, color: "#888" }}>Aún no has generado informes.</p>
+                )}
+              </>
+            ) : (
+              <p style={{ margin: 0, fontSize: 13, color: "#888" }}>No se pudo cargar tu actividad.</p>
+            )}
+          </section>
+
+          <section style={card}>
+            <h2 style={{ margin: "0 0 1rem", fontSize: 16, fontWeight: 500 }}>Accesos rápidos</h2>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {ACCESOS.map((a) => (
+                <button
+                  key={a.ruta}
+                  type="button"
+                  onClick={() => navigate(a.ruta)}
+                  style={{ background: "#fff", border: "0.5px solid #d8d8e4", borderRadius: 10, padding: "10px 14px",
+                    fontSize: 13, cursor: "pointer", color: "#333" }}
+                >
+                  <span aria-hidden="true">{a.emoji}</span> {a.etiqueta}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section style={card}>
             <h2 style={{ margin: "0 0 1rem", fontSize: 16, fontWeight: 500 }}>Datos personales</h2>
             <form onSubmit={guardarPerfil} noValidate>
               <div style={{ marginBottom: 14 }}>
@@ -213,7 +318,8 @@ export default function Profile() {
                   style={inputStyle}
                 />
                 <p id="perfil-telefono-ayuda" style={{ margin: "6px 0 0", fontSize: 12, color: "#888" }}>
-                  A este número enviamos el código si olvidas tu contraseña.
+                  A este número enviamos el código si olvidas tu contraseña. Si no registras uno, lo enviamos a tu
+                  correo ({usuario?.correo}).
                 </p>
               </div>
               {msgPerfil && <Mensaje {...msgPerfil} />}

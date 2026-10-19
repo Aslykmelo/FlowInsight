@@ -338,7 +338,8 @@ export default function Reports() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${report.nombre}.${report.formato}`;
+      const nombreSeguro = report.nombre.replace(/[\\/:*?"<>|]+/g, "-").trim() || "reporte";
+      a.download = `${nombreSeguro}.${report.formato}`;
       document.body.appendChild(a);
       a.click();
       a.remove();

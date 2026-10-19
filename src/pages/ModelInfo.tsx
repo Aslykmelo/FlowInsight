@@ -59,7 +59,7 @@ export default function ModelInfo() {
             display: "flex",
             flexDirection: "column",
             gap: "1.25rem",
-            maxWidth: 860,
+            maxWidth: 1000,
           }}
         >
           <section style={card}>
@@ -74,6 +74,44 @@ export default function ModelInfo() {
             <p style={{ ...parrafo, marginBottom: 0 }}>
               Riesgo <strong>bajo</strong>: hasta 30 %. <strong>Medio</strong>: entre 30 % y
               60 %. <strong>Alto</strong>: más de 60 %.
+            </p>
+          </section>
+
+          <section style={card}>
+            <h2 style={h2}>El recorrido, paso a paso</h2>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "stretch" }}>
+              {PASOS.map((p, i) => (
+                <div key={p.titulo} style={{ display: "flex", alignItems: "center", gap: 8, flex: "1 1 130px" }}>
+                  <div style={{ flex: 1, background: p.fondo, borderRadius: 12, padding: "14px 12px", textAlign: "center",
+                    minHeight: 132 }}>
+                    <div aria-hidden="true" style={{ fontSize: 28 }}>{p.icono}</div>
+                    <p style={{ margin: "6px 0 4px", fontSize: 13, fontWeight: 600, color: "#1B2430" }}>
+                      {i + 1}. {p.titulo}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 12, color: "#555", lineHeight: 1.45 }}>{p.texto}</p>
+                  </div>
+                  {i < PASOS.length - 1 && <span aria-hidden="true" style={{ color: "#534AB7", fontSize: 20 }}>›</span>}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section style={card}>
+            <h2 style={h2}>Niveles de riesgo</h2>
+            <div style={{ display: "flex", height: 28, borderRadius: 8, overflow: "hidden", fontSize: 12, fontWeight: 600,
+              color: "#fff" }}>
+              <div style={{ flex: 30, background: "#1D9E75", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                Bajo · hasta 30 %
+              </div>
+              <div style={{ flex: 30, background: "#EF9F27", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                Medio · 30 a 60 %
+              </div>
+              <div style={{ flex: 40, background: "#E24B4A", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                Alto · más de 60 %
+              </div>
+            </div>
+            <p style={{ ...parrafo, margin: "10px 0 0", fontSize: 13, color: "#666" }}>
+              El porcentaje es la probabilidad que calcula el modelo de que el cliente no compre en los próximos 90 días.
             </p>
           </section>
 
@@ -124,7 +162,31 @@ export default function ModelInfo() {
               </section>
 
               <section style={card}>
-                <h2 style={h2}>Resultado actual (versión {info.version})</h2>
+                <h2 style={h2}>¿Qué tan efectivo es? (versión {info.version})</h2>
+                <p style={{ ...parrafo, fontSize: 13, color: "#666" }}>
+                  Medido con los periodos más recientes, que el modelo no vio al aprender. Los porcentajes son
+                  los que dejó el entrenamiento; no se ajustaron para verse mejor.
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+                  <Medidor
+                    titulo="Precisión"
+                    valor={info.precision}
+                    explicacion={info.precision === null ? "" :
+                      `De cada 100 clientes que marca en riesgo, ${Math.round(info.precision * 100)} realmente se iban.`}
+                  />
+                  <Medidor
+                    titulo="Cobertura"
+                    valor={info.recall}
+                    explicacion={info.recall === null ? "" :
+                      `De cada 100 clientes que de verdad se van, detecta ${Math.round(info.recall * 100)}.`}
+                  />
+                  <Medidor
+                    titulo="F1 (balance)"
+                    valor={info.f1}
+                    meta={info.umbral_f1}
+                    explicacion="Resume precisión y cobertura en un solo número. La raya marca la meta del proyecto."
+                  />
+                </div>
                 <div className="table-scroll">
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 460 }}>
                     <thead>
@@ -175,6 +237,42 @@ export default function ModelInfo() {
           )}
         </main>
       </div>
+    </div>
+  );
+}
+
+const PASOS = [
+  { icono: "🗂️", titulo: "Historial", texto: "Pedidos de cada cliente: fechas, montos y productos.", fondo: "#EEF3FE" },
+  { icono: "🧮", titulo: "Variables", texto: "Se resume el comportamiento: cuándo, cuánto y cada cuánto compra.", fondo: "#F6F5FD" },
+  { icono: "🤖", titulo: "Modelos", texto: "Uno estima la próxima compra y otro la probabilidad de abandono.", fondo: "#E1F5EE" },
+  { icono: "🚦", titulo: "Riesgo", texto: "Cada cliente queda en riesgo bajo, medio o alto.", fondo: "#FAEEDA" },
+  { icono: "🎯", titulo: "Acción", texto: "Alertas, mensajes de promoción y reportes para el equipo comercial.", fondo: "#FAECE7" },
+];
+
+function Medidor({ titulo, valor, meta, explicacion }: {
+  titulo: string; valor: number | null; meta?: number; explicacion: string;
+}) {
+  const radio = 38;
+  const circunferencia = 2 * Math.PI * radio;
+  const fraccion = valor === null ? 0 : Math.max(0, Math.min(1, valor));
+  const color = meta !== undefined && valor !== null && valor < meta ? "#BA7517" : "#534AB7";
+  return (
+    <div style={{ flex: "1 1 190px", border: "0.5px solid #e8e8ee", borderRadius: 12, padding: 14, textAlign: "center" }}>
+      <svg width="104" height="104" viewBox="0 0 104 104" role="img"
+        aria-label={`${titulo}: ${valor === null ? "sin dato" : pct(valor)}`}>
+        <circle cx="52" cy="52" r={radio} fill="none" stroke="#ECEBF6" strokeWidth="10" />
+        <circle cx="52" cy="52" r={radio} fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
+          strokeDasharray={`${fraccion * circunferencia} ${circunferencia}`} transform="rotate(-90 52 52)" />
+        {meta !== undefined && (
+          <line x1="52" y1="6" x2="52" y2="18" stroke="#1B2430" strokeWidth="2"
+            transform={`rotate(${meta * 360} 52 52)`} />
+        )}
+        <text x="52" y="58" textAnchor="middle" fontSize="19" fontWeight="600" fill="#1B2430">
+          {valor === null ? "—" : `${Math.round(valor * 100)}%`}
+        </text>
+      </svg>
+      <p style={{ margin: "4px 0 4px", fontSize: 14, fontWeight: 600 }}>{titulo}</p>
+      <p style={{ margin: 0, fontSize: 12, color: "#666", lineHeight: 1.45 }}>{explicacion}</p>
     </div>
   );
 }

@@ -43,3 +43,18 @@ class ResetPasswordIn(BaseModel):
 
 class MensajeOut(BaseModel):
     mensaje: str
+
+
+class ReporteReciente(BaseModel):
+    id_reporte: int
+    nombre: str | None = None
+    tipo: str | None = None
+    formato: str | None = None
+    fecha: datetime | None = None
+
+
+class ActividadOut(BaseModel):
+    reportes_generados: int
+    reportes_por_formato: dict[str, int]
+    reportes_recientes: list[ReporteReciente]
+    ultima_sesion: datetime | None = None

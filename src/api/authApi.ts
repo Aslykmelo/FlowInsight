@@ -65,3 +65,12 @@ export function mensajeDeError(err: unknown, porDefecto: string): string {
   }
   return porDefecto;
 }
+
+export interface ActividadUsuario {
+  reportes_generados: number;
+  reportes_por_formato: Record<string, number>;
+  reportes_recientes: { id_reporte: number; nombre: string | null; tipo: string | null; formato: string | null; fecha: string | null }[];
+  ultima_sesion: string | null;
+}
+
+export const getActividad = () => api.get<ActividadUsuario>("/auth/me/actividad").then((r) => r.data);

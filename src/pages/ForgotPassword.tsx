@@ -126,7 +126,7 @@ export default function ForgotPassword() {
         {paso === "correo" && (
           <form onSubmit={pedirCodigo} noValidate>
             <p style={{ margin: "0 0 1.5rem", fontSize: 14, color: "#888" }}>
-              Te enviaremos un código por mensaje de texto al teléfono registrado en tu cuenta.
+              Te enviaremos un código de verificación por mensaje de texto al teléfono de tu cuenta o, si no tienes uno registrado, a tu correo.
             </p>
             <div style={{ marginBottom: 16 }}>
               <label htmlFor="fp-correo" style={labelStyle}>Correo electrónico</label>
@@ -163,7 +163,7 @@ export default function ForgotPassword() {
             </p>
             {import.meta.env.DEV && (
               <p style={{ margin: "0 0 1.25rem", fontSize: 12, color: "#888" }}>
-                Modo desarrollo: sin proveedor de SMS configurado, el código aparece en la
+                Modo desarrollo: sin proveedor de SMS ni de correo configurado, el código aparece en la
                 consola del servidor.
               </p>
             )}
